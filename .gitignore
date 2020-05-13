@@ -3,4 +3,7 @@
 *.dat
 *.xlsx
 *.png
+*.h5
+*.Rhistory
+*.RData
 
