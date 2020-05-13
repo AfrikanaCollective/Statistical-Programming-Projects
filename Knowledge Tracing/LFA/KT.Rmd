@@ -729,7 +729,7 @@ play_data[,Item:=factor(Difficulty,
                         labels = c(1:10),
                         ordered = T)]
 cat("\n\n")
-resid_interact(pfm.model) 
+resid_panel(pfm.model) 
 ```
 
 <br/>
