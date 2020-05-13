@@ -1,0 +1,944 @@
+---
+title: "Learning Factor Analysis"
+author: "Timothy Tuti"
+date: '`r format(Sys.time(), "%d %B, %Y")`'
+output: html_document
+---
+
+<br/>
+
+Explanation: https://link.springer.com/chapter/10.1007/978-3-030-29736-7_5
+
+
+### Learning data
+
+
+<p/>
+<font size="3" face="Corbel">
+
+```{r echo=FALSE, results='asis', message=F, warning=F}
+library(data.table)
+library(ggplot2)
+library(lme4)
+library(optimx)
+library(ggsci)
+library(tidyverse)
+library(groupdata2)
+library(ggpubr)
+library(pROC)
+library(caret)
+library(foreach)
+library(doParallel)
+library(extrafont)
+library(sjPlot)
+library(gridExtra)
+library(FSA)
+library(knitr)
+library(kableExtra)
+library(ggalluvial)
+library(DescTools)
+library(ggResidpanel)
+library(eRm)
+
+loadfonts(device="win")
+par(family='Corbel')
+
+data_root = "D:/DPhil - University of Oxford/Reports/ELO/"
+
+setwd("D:/Statistical Programming Projects/Knowledge Tracing/LFA")
+
+play_data = data.table(read_csv(paste0(data_root,"life_play_data.csv")))
+
+#play_data[,Session:=as.POSIXct(as.character(Session),format="%Y-%m-%d %H:%M:%S")]
+
+# Rename question values to consume unused spaces
+play_data[Question==7,Question:=6]
+play_data[Question==9,Question:=7]
+play_data[Question==10,Question:=8]
+play_data[Question==12,Question:=9]
+play_data[Question==13,Question:=10]
+
+# Convert SRL attribute to factor
+play_data[,SRL:=as.character(SRL)]
+play_data[SRL=='',SRL:=NA]
+play_data[,SRL:=factor(SRL,levels=c("Low SRL profile","Average SRL profile","Above Average SRL profile","High SRL profile"))]
+play_data <- within(play_data, SRL <- relevel(SRL, ref = "High SRL profile"))
+
+# Lag feedback by 1 student-step
+play_data[,Feedback:=Feedback+1]
+play_data[Correct==1,Feedback:=0]
+
+# Convert Feedback attribute to factor
+play_data[,Feedback:=factor(Feedback,levels = c(0:3),labels =c("None","Essential","Reflective","Detailed"))]
+play_data <- within(play_data, Feedback <- relevel(Feedback, ref = 'None'))
+
+# Convert Spacing attribute to factor
+play_data[,Gap_Type:=as.character(Gap_Type)]
+play_data[,Gap_Type:=factor(Gap_Type,levels=c("None","<= 1 Hour","<= 1 Day", "<= 1 Week", "<= 1 Month","> 1 Month"))]
+play_data <- within(play_data, Gap_Type <- relevel(Gap_Type, ref = 'None'))
+
+# Create opportunity attribute (needed for LFA models)
+play_data[,I:=1L]
+play_data[,Opportunity:=pcumsum(I),by=list(User,Question)]
+play_data[,I:=NULL]
+
+# Convert Quiz attribute to factor,renamed to KC
+play_data[,Question:=factor(Question,levels=c(1:10),labels=paste0("KC",c(1:10)))]
+play_data[,Time.Scale:=scale(Time)]
+
+# Create Previous Success/Failures (needed for PFMs)
+play_data[,Prev_Success:=pcumsum(Correct),by=list(User,Question)]
+play_data[,Prev_fail_curve:=1L]
+play_data[Correct==1,Prev_fail_curve:=0L]
+play_data[,Prev_Failure:=pcumsum(Prev_fail_curve),by=list(User,Question)]
+play_data[,Prev_fail_curve:=NULL]
+
+# Rename key columns to consistent terminology with EDM
+setnames(play_data,c("User","Question"),c("Student","KC"))
+
+# Where demographic data is available, link to play_data
+user_data = data.table(read.csv(paste0(data_root,"life_users.csv")))
+user_data = user_data[user_data$User %in% play_data$Student, copy(.SD)]
+user_data = user_data[,copy(.SD),.SDcols=c("User","Age","Experience","Cadre","Level","ETAT","Region")]
+user_data[,Cadre:=as.character(Cadre)]
+user_data[Cadre=='',Cadre:=NA]
+user_data[Cadre=="Clinical OfficerDoctor",Cadre:='Clinical Officer']
+user_data[,Cadre:=factor(Cadre,levels = c("Doctor", "Nurse", "Other", "Clinical Officer"))]
+user_data <- within(user_data, Cadre <- relevel(Cadre, ref = 'Nurse'))
+user_data[,Level:=as.character(Level)]
+user_data[Level=='',Level:=NA]
+user_data[Level=="StudentIntern",Level:='Student']
+user_data[,Level:=factor(Level,levels = c("Intern", "Specialised", "Student", "General Officer"))]
+user_data <- within(user_data, Level <- relevel(Level, ref = 'Student'))
+user_data[,Region:=as.character(Region)]
+user_data[Region=='',Region:=NA]
+user_data[Region=='nan',Region:=NA]
+user_data[,Region:=factor(Region,levels = c("Sub-Saharan Africa", "Latin America and the Caribbean", "South-eastern Asia", 
+                                            "Western Asia", "Eastern Asia", "Northern Africa", "Central Asia"))]
+user_data <- within(user_data, Region <- relevel(Region, ref = 'Sub-Saharan Africa'))
+
+setnames(user_data,"User","Student")
+play_data = merge(play_data,user_data,by='Student')
+
+cross_group_feedback_users = unique(play_data$Student[play_data$Group=='Control'& play_data$Feedback=='Reflective'])
+play_data = play_data[!(Student %in% cross_group_feedback_users)]
+play_data[,Student:=as.character(Student)]
+
+# Primary outcome: Correct of first try in the current learning session
+play_data[,Correct_First_Try:=ifelse(Correct==1 & Try==1,1L,0L)]
+
+# Shorten user IDs
+play_data$Student <- play_data$Student %>% 
+  as_factor() %>%
+  as.integer() %>%
+  paste0("S",.)
+
+kable(head(play_data), caption = 'LIFE Data Summary: Top 5') %>%
+  kable_styling(bootstrap_options = c("striped", "hover","condensed"),full_width = F)
+```
+
+
+<br/>
+
+### Summary statistics
+
+```{r echo=FALSE, results='asis', message=F, warning=F}
+tabular_data = play_data[,copy(.SD)]
+
+get_summary_stats <- function(user_data){
+  #browser()
+  
+  mean_score = round((sum(user_data[Try==1,Correct]) / nrow(user_data[Try==1,copy(.SD)]))*100,2)
+  mean_time = round(mean(user_data[,Time]),2)
+  mean_opp = round(mean(user_data[,Opportunity]),2)
+  mean_feedback = nrow(user_data[Feedback !='None',copy(.SD)])
+  
+  complete_session = F
+  if(length(user_data[Try==1,Correct])==10)
+    complete_session = T
+  
+  return(list(Performance=mean_score,Time=mean_time,Opportunities=mean_opp,Feedback=mean_feedback,Complete=complete_session))
+  
+}
+summary_cont = tabular_data[,get_summary_stats(.SD),by=list(Student,Session)]
+summary_cont[,Student:=NULL]
+summary_cont[,Session:=NULL]
+
+generate_stat_cont = function(col_data){
+  #browser()
+  ave = round(mean(as.list(col_data[,1])[[1]]),2)
+  sd = round(sd(as.list(col_data[,1])[[1]]),2)
+  qr_25 = round(quantile(as.list(col_data[,1])[[1]],.25),2)
+  qr_75 = round(quantile(as.list(col_data[,1])[[1]],.75),2)
+  result = paste0(ave,",",sd," (",qr_25,"-",qr_75,")")
+  
+  ave_complete = round(mean(as.list(col_data[Complete==TRUE,1])[[1]]),2)
+  sd_complete = round(sd(as.list(col_data[Complete==TRUE,1])[[1]]),2)
+  qr_25_complete = round(quantile(as.list(col_data[Complete==TRUE,1])[[1]],.25),2)
+  qr_75_complete = round(quantile(as.list(col_data[Complete==TRUE,1])[[1]],.75),2)
+  result_complete = paste0(ave_complete,",",sd_complete," (",qr_25_complete,"-",qr_75_complete,")")
+  
+  ave_incomplete = round(mean(as.list(col_data[Complete==FALSE,1])[[1]]),2)
+  sd_incomplete = round(sd(as.list(col_data[Complete==FALSE,1])[[1]]),2)
+  qr_25_incomplete = round(quantile(as.list(col_data[Complete==FALSE,1])[[1]],.25),2)
+  qr_75_incomplete = round(quantile(as.list(col_data[Complete==FALSE,1])[[1]],.75),2)
+  result_incomplete = paste0(ave_incomplete,",",sd_incomplete," (",qr_25_incomplete,"-",qr_75_incomplete,")")
+  
+  #Welch Two Sample t-test
+  parametric_pvalue = t.test(as.list(col_data[Complete==T,1])[[1]],as.list(col_data[Complete==F,1])[[1]])
+  non_parametric_pvalue = wilcox.test(as.list(col_data[Complete==T,1])[[1]],as.list(col_data[Complete==F,1])[[1]])
+  complete_normal = shapiro.test(as.list(col_data[Complete==T,1])[[1]])
+  incomplete_normal = shapiro.test(as.list(col_data[Complete==F,1])[[1]])
+  
+  return(list(Indicator=names(col_data)[1],
+              Complete=result_complete,
+              Norm_Complete=round(complete_normal$p.value,4),
+              Norm_Incomplete=round(incomplete_normal$p.value,4),
+              Incomplete=result_incomplete,
+              parametric=round(parametric_pvalue$p.value,4),
+              non_parametric=round(non_parametric_pvalue$p.value,4),
+              All=result))
+}
+
+perf_res = summary_cont[,generate_stat_cont(.SD),.SDcols=c('Performance','Complete')]
+perf_time = summary_cont[,generate_stat_cont(.SD),.SDcols=c('Time','Complete')]
+perf_opp = summary_cont[,generate_stat_cont(.SD),.SDcols=c('Opportunities','Complete')]
+perf_feedback = summary_cont[,generate_stat_cont(.SD),.SDcols=c('Feedback','Complete')]
+res_cont = rbind(perf_res,perf_time,perf_opp,perf_feedback)
+write.csv(res_cont,"summary_stats.csv",row.names=F)
+
+
+get_summary_stats_tab <- function(user_data){
+  #browser()
+  
+  if('Session' %in% names(user_data)){
+    report_data = user_data[,.SD[1],by=Session]
+    complete_session = ifelse(report_data$Session_Complete==1,T,F)
+    gap_levels = data.table(Levels=as.character(report_data$Gap_Type))
+    gap_levels[,Indicator:='Spacing']
+    gap_levels[,Complete:=complete_session]
+    setcolorder(gap_levels, neworder=c('Indicator','Levels','Complete'))
+    
+    demographic_details = report_data[,.SD[1],.SDcols=c("Group","ETAT","Complete_Plays")]
+    demo = data.table(t(demographic_details))
+    names(demo)='Levels'
+    demo[,Indicator:=c("Group","ETAT",'Complete_Plays')]
+    demo[Indicator=='Complete_Plays',Indicator:='Completed Sessions']
+    setcolorder(demo, neworder=c('Indicator','Levels'))
+    demo[,Complete:='N/A']
+    res_tab = rbind(gap_levels,demo)
+    
+  }else{
+    feedback_levels = as.data.table(table(user_data$Feedback))
+    feedback_levels[,Indicator:='Feedback']
+    setnames(feedback_levels,names(feedback_levels),c('Levels','N','Indicator'))
+    complete_session = ifelse(user_data$Session_Complete==1,T,F)
+    
+    feedback_levels[,Complete:=unique(complete_session)]
+    setcolorder(feedback_levels, neworder=c('Indicator','Levels','N','Complete'))
+    res_tab = feedback_levels[,copy(.SD)]
+  }
+  return(res_tab)
+}
+
+summary_cont_tab_fb = tabular_data[,get_summary_stats_tab(.SD),by=list(Student,Session)]
+
+by_completion = as.data.table(
+  summary_cont_tab_fb %>% 
+    group_by(Levels,Complete) %>%
+    summarise(
+      All = sum(N)
+    )
+)
+
+by_completion = dcast(by_completion, Levels  ~ Complete, value.var = "All")
+setnames(by_completion,names(by_completion),c('Levels','Incomplete','Complete'))
+
+preferred.order <- c("None","Essential","Reflective","Detailed")
+by_completion = by_completion[preferred.order, on="Levels"]
+by_completion[,All:=Incomplete + Complete]
+
+add_percentages= function(row_data,last_col){
+  #browser()
+  all = row_data[,All]
+  complete = row_data[,Complete]
+  incomplete = row_data[,Incomplete]
+  
+  return(list(
+    Levels= row_data[,Levels],
+    Incomplete = paste0(incomplete," (",round(incomplete/all,4)*100,"%)"),
+    Complete = paste0(complete," (",round(complete/all,4)*100,"%)"),
+    All=paste0(all," (",round(all/last_col,4)*100,"%)")
+  ))
+} 
+
+by_completion[,Key:=.I]
+feedback_summary = by_completion[,add_percentages(.SD,sum(by_completion$All)),by=Key]
+feedback_summary[,Key:=NULL]
+write.csv(feedback_summary,"summary_feedback.csv",row.names=F)
+
+kable(feedback_summary, caption = 'Feedback Summary') %>%
+  kable_styling(bootstrap_options = c("striped", "hover","condensed"),full_width = F, position = "left")
+
+summary_cont_tab = tabular_data[,get_summary_stats_tab(.SD),by=list(Student)]
+
+summary_cont_tab_spacing = summary_cont_tab[Indicator=='Spacing',copy(.SD)]
+summary_cont_tab_spacing[,I:=1L]
+
+by_completion_space = as.data.table(
+  summary_cont_tab_spacing %>% 
+    group_by(Levels,Complete) %>%
+    summarise(
+      All = sum(I)
+    ))
+
+by_completion_space = dcast(by_completion_space, Levels  ~ Complete, value.var = "All")
+setnames(by_completion_space,names(by_completion_space),c('Levels','Incomplete','Complete'))
+
+preferred.order <-c("None","<= 1 Hour","<= 1 Day","<= 1 Week","<= 1 Month","> 1 Month")
+by_completion_space = by_completion_space[preferred.order, on="Levels"]
+by_completion_space[,All:=Incomplete + Complete]
+
+by_completion_space[,Key:=.I]
+spacing_summary = by_completion_space[,add_percentages(.SD,sum(by_completion_space$All)),by=Key]
+spacing_summary[,Key:=NULL]
+write.csv(spacing_summary,"summary_spacing.csv",row.names=F)
+
+
+find_users_complete = play_data[,copy(.SD),.SDcols=c('Student','Complete_Plays')]
+users_finished = unique(find_users_complete)
+users_finished[,Finished:=ifelse(Complete_Plays > 0,T,F)]
+
+kable(spacing_summary,caption = 'Spacing summary') %>%
+  kable_styling(bootstrap_options = c("striped", "hover","condensed"),full_width = F,position = "left")
+
+percentage_finished = round(sum(users_finished$Finished)/nrow(users_finished),4)*100
+cat(paste0(percentage_finished,"% of learners had at least one complete learning session"))
+```
+
+<br/>
+
+The Bayesian Knowledge Tracing (BKT) model assumes the latent states to be independence among the difference skills in the learning module. Even within an individual skill, BKT assumes the probability of the next learning outcome to depend only on the latest previous outcome (The Markov assumption). Additionally BKT assumes that:
+
+    1. Forgetting does not occur 
+    2. Its typical implementation does not allow for learners to have different learning rates 
+    3. It assumes that all students have the same probability of knowing a particular skill at their first opportunity (Pardos and Heffernan, 2010) 
+    4. It suffers from the problem of multiple global maxima when trying to estimate model parameters (Gong et al., 2011). 
+    5. While multiple-restarts estimation methods like Markov Chains Monte-Carlo estimations can help minimise local maxima challenges in estimating BKT model  parameters, it is hard to eradicate the identifiability problem where given the same model structure and same data, there are multiple (differing) sets of parameter values that fit the data equally well (Gong et al., 2011). This is because in probabilistic terms, to find the global solution requires the model to iterate over all possible learner sequences. However, iterating over all learner sequences of varying lengths in order to maximize the objective function makes the number of iterations exponential to the size of the learning data, rendering it practically intractable.
+
+To address some of the shortcomings of BKT models, Learning Factors Analysis (LFA) and their different modalities such as Performance Factors Models (PFMs) and Additive Factor Models(AFMs) have been proposed (Cen et al., 2006, Cen et al., 2008, Pavlik Jr et al., 2009). They model student knowledge states using logistic regression models in order to deal with the incorporation of multiple skills while estimating student ability into the model. They exploit the number of successes or failures of a learner’s attempt at a KC to predict whether the learner has acquired understanding about the KC. 
+
+More details on the application of these models for this dataset can be found here: https://link.springer.com/chapter/10.1007/978-3-030-29736-7_5 
+
+
+### Cross-validation of model performance in predicting outcome on next step
+```{r echo=FALSE, results='asis', message=F, warning=F}
+set.seed(197)
+
+# If results file exists read results and proceed, otherwise compute them
+tryCatch({ 
+    with_srl = as.data.table(read.csv(paste0(data_root,'factor_models_perf.csv')))
+    
+    aplot <- ggplot(aes(x=Ratio,y=Value,group=Model,color=Model,linetype=Model),data=with_srl) +
+      geom_line(size=1.05)+geom_point(size=3,aes(shape=Model))+
+      theme_minimal(base_family="Corbel") +
+      facet_wrap(~Indicator,ncol=2) +
+      scale_color_aaas() +
+      ylab('Performance') +
+      xlab('Ratio of Dataset Used as Test Set') +
+      ggtitle("Learning Factor Analysis Model Performance")+
+      theme(
+        plot.title = element_text(size = 13, face = "bold"),
+        legend.position="bottom",
+        legend.text = element_text(margin=margin(r= 10,unit="pt")),
+        legend.key.width = unit(4, "line"),
+        legend.title=element_text(size=12, face="bold"),
+        axis.title.y = element_text(size =12),
+        axis.title.x = element_text(size =12),
+        axis.text.y = element_text(size =11),
+        axis.text.x = element_text(size =11),
+        strip.text = element_text(size=12,face="bold")
+      )
+    
+    print(aplot)
+    cat('\n\n')
+    cat('\n\n')
+    
+    for(i in c('AFM','PFM')){
+      cat(i)
+      cat('\n')
+      min_accuracy = round(min(with_srl[Model==i & Indicator=='Accuracy',Value]),3)
+      max_accuracy = round(max(with_srl[Model==i & Indicator=='Accuracy',Value]),3)
+      mean_accuracy = round(mean(with_srl[Model==i & Indicator=='Accuracy',Value]),3)
+      
+      min_auc = round(min(with_srl[Model==i & Indicator=='AUC',Value]),3)
+      max_auc = round(max(with_srl[Model==i & Indicator=='AUC',Value]),3)
+      mean_auc = round(mean(with_srl[Model==i & Indicator=='AUC',Value]),3)
+      
+      cat(paste0("Accuracy: ",mean_accuracy, " (",min_accuracy," - ",max_accuracy,")"))
+      cat('\n')
+      cat(paste0("AUC: ",mean_auc, " (",min_auc," - ",max_auc,")"))
+      cat('\n\n')
+    }
+},warning = function(e) {
+  
+   life_transactions.ml=play_data[,copy(.SD)] # Copy dataset to use
+
+   sensitivity_perf <- function(life_dataset,isAFM=T,useSRL=F){
+      
+     #parallelise this computation
+     results.matrix <- foreach(i=seq(0.1,0.5,0.1), .combine=cbind, .packages=c('groupdata2','data.table','lme4','pROC','caret','optimx')) %dopar% {
+  
+       crossvalidate <- function(data, k, dependent, AFM = F, SRL=F){
+         performances <- c()
+         for (fold in 1:k){
+           training_set <- data[data$.folds != fold,]
+           training_set <- as.data.table(training_set)
+           training_set[,Opportunity.Scale:=scale(Opportunity)]
+           training_set[,Prev_Success.Scale:=scale(Prev_Success)]
+           training_set[,Prev_Failure.Scale:=scale(Prev_Failure)]
+  
+           testing_set <- data[data$.folds == fold,]
+           testing_set <- as.data.table(testing_set)
+           testing_set[,Opportunity.Scale:=scale(Opportunity)]
+           testing_set[,Prev_Success.Scale:=scale(Prev_Success)]
+           testing_set[,Prev_Failure.Scale:=scale(Prev_Failure)]
+  
+           if(AFM){
+             if(SRL){
+               model <- glmer(Correct_First_Try~(1|Student)+SRL+KC+KC:Opportunity.Scale-1,
+                                family=binomial(),
+                                glmerControl(optimizer="bobyqa",optCtrl=list(maxfun=2e6)),
+                                data=training_set[!is.na(SRL),copy(.SD)])
+             }else{
+               model <- glmer(Correct_First_Try~(1|Student)+KC+KC:Opportunity.Scale-1,
+                                family=binomial(),
+                                control=glmerControl(optimizer="bobyqa",optCtrl=list(maxfun=2e6)),
+                                data=training_set)
+             }
+  
+           } else {
+             if(SRL){
+               model <- glmer(Correct_First_Try~(1|Student)+SRL+KC+KC:Prev_Success.Scale-1+KC:Prev_Failure.Scale-1,
+                                family=binomial(),
+                                control=glmerControl(optimizer="bobyqa",optCtrl=list(maxfun=2e6)),
+                                data=training_set[!is.na(SRL),copy(.SD)])
+             }else{
+               model <- glmer(Correct_First_Try~(1|Student)+KC+KC:Prev_Success.Scale-1+KC:Prev_Failure.Scale-1,
+                                family=binomial(),
+                                control=glmerControl(optimizer="bobyqa",optCtrl=list(maxfun=2e6)),
+                                data=training_set)
+               }
+  
+           }
+           if(SRL){
+             predicted <- predict(model, testing_set[!is.na(SRL),copy(.SD)], type="response", allow.new.levels=T)
+             predicted =ifelse(predicted<0.5,0,1)
+             cm=confusionMatrix(as.factor(predicted),as.factor(testing_set[!is.na(SRL),Correct_First_Try]),positive="1")
+           }else{
+             predicted <- predict(model, testing_set, type="response", allow.new.levels=T)
+             predicted =ifelse(predicted<0.5,0,1)
+             cm=confusionMatrix(as.factor(predicted),as.factor(testing_set$Correct_First_Try),positive="1")
+           }
+           performances[fold] <- round(cm$overall[1],4)
+         }
+         return(c('Accuracy' = mean(performances)))
+       }
+  
+       sensitivity_auc <- function(train_set,test_set,AFM=F,SRL=F){
+  
+         train_set = as.data.table(train_set)
+         test_set = as.data.table(test_set)
+  
+         train_set[,Opportunity.Scale:=scale(Opportunity)]
+         train_set[,Prev_Success.Scale:=scale(Prev_Success)]
+         train_set[,Prev_Failure.Scale:=scale(Prev_Failure)]
+  
+         test_set[,Opportunity.Scale:=scale(Opportunity)]
+         test_set[,Prev_Success.Scale:=scale(Prev_Success)]
+         test_set[,Prev_Failure.Scale:=scale(Prev_Failure)]
+  
+         if(AFM){
+           if(SRL){
+             model <- glmer(Correct_First_Try~(1|Student)+SRL+KC+KC:Opportunity.Scale-1,
+                              family=binomial(),
+                              control=glmerControl(optimizer="bobyqa",optCtrl=list(maxfun=2e6)),
+                              data=train_set[!is.na(SRL),copy(.SD)])
+           }else{
+             model <- glmer(Correct_First_Try~(1|Student)+KC+KC:Opportunity.Scale-1,
+                              family=binomial(),
+                              control=glmerControl(optimizer="bobyqa",optCtrl=list(maxfun=2e6)),
+                              data=train_set)
+           }
+         }else{
+           if(SRL){
+             model <- glmer(Correct_First_Try~(1|Student)+SRL+KC+KC:Prev_Success.Scale-1+KC:Prev_Failure.Scale-1,
+                              family=binomial(),
+                              control=glmerControl(optimizer="bobyqa",optCtrl=list(maxfun=2e6)),
+                              data=train_set[!is.na(SRL),copy(.SD)])
+           }else{
+             model <- glmer(Correct_First_Try~(1|Student)+KC+KC:Prev_Success.Scale-1+KC:Prev_Failure.Scale-1,
+                              family=binomial(),
+                              control=glmerControl(optimizer="bobyqa",optCtrl=list(maxfun=2e6)),
+                              data=train_set)
+           }
+  
+         }
+         if(SRL){
+           predicted=predict(model,test_set[!is.na(SRL),copy(.SD)],type="response",allow.new.levels=T)
+           aucroc=roc(predictor=predicted,response=test_set[!is.na(SRL),Correct_First_Try],ci=F,plot=F)
+         }else{
+           predicted=predict(model,test_set,type="response",allow.new.levels=T)
+           aucroc=roc(predictor=predicted,response=test_set$Correct_First_Try,ci=F,plot=F)
+         }
+  
+         return(round(aucroc$auc[1],4))
+       }
+  
+  
+       model_params_get <- function(train_set,AFM=F,SRL=F){
+  
+         train_set = as.data.table(train_set)
+  
+         train_set[,Opportunity.Scale:=scale(Opportunity)]
+         train_set[,Prev_Success.Scale:=scale(Prev_Success)]
+         train_set[,Prev_Failure.Scale:=scale(Prev_Failure)]
+  
+         if(AFM){
+           if(SRL){
+             model <- glmer(Correct_First_Try~(1|Student)+SRL+KC+KC:Opportunity.Scale-1,
+                              family=binomial(),
+                              control=glmerControl(optimizer="bobyqa",optCtrl=list(maxfun=2e6)),
+                              data=train_set[!is.na(SRL),copy(.SD)])
+           }else{
+             model <- glmer(Correct_First_Try~(1|Student)+KC+KC:Opportunity.Scale-1,
+                              family=binomial(),
+                              control=glmerControl(optimizer="bobyqa",optCtrl=list(maxfun=2e6)),
+                              data=train_set)
+           }
+         }else{
+           if(SRL){
+             model <- glmer(Correct_First_Try~(1|Student)+SRL+KC+KC:Prev_Success.Scale-1+KC:Prev_Failure.Scale-1,
+                              family=binomial(),
+                              control=glmerControl(optimizer="bobyqa",optCtrl=list(maxfun=2e6)),
+                              data=train_set[!is.na(SRL),copy(.SD)])
+           }else{
+             model <- glmer(Correct_First_Try~(1|Student)+KC+KC:Prev_Success.Scale-1+KC:Prev_Failure.Scale-1,
+                              family=binomial(),
+                              control=glmerControl(optimizer="bobyqa",optCtrl=list(maxfun=2e6)),
+                              data=train_set)
+           }
+  
+         }
+         aic = round(AIC(logLik(model)),2)
+         bic = round(BIC(logLik(model)),2)
+         llog = round(head(logLik(model)),2)
+         model_params = list(aic,bic,llog)
+         return(model_params)
+       }
+  
+  
+       parts <- partition(life_dataset, p = i, id_col = 'Student', cat_col = 'KC')
+       test_set <- parts[[1]]
+       train_set <- parts[[2]]
+       train_set <- fold(train_set, k = 10, cat_col = 'KC', id_col = 'Student')
+       train_set <- train_set[order(train_set$.folds),]
+       model_accuracy = crossvalidate(train_set, k=10, dependent='Correct', AFM=isAFM, SRL=useSRL)
+       model_auc = sensitivity_auc(train_set,test_set,isAFM,useSRL)
+       model_params = model_params_get(train_set,isAFM,useSRL)
+  
+       model_aic = model_params[[1]]
+       model_bic = model_params[[2]]
+       model_loglink = model_params[[3]]
+  
+       results = list(model_accuracy,model_auc,model_aic,model_bic,model_loglink)
+       results
+     }
+  
+     performances <- data.table(results.matrix[1,])
+     roc_auc <- data.table(results.matrix[2,])
+     aic <- data.table(results.matrix[3,])
+     bic <- data.table(results.matrix[4,])
+     loglikely <- data.table(results.matrix[5,])
+  
+     return(list('Accuracy'=performances,
+                 'AUC_ROC'=roc_auc,
+                 'AIC'=aic,
+                 'BIC'=bic,
+                 'loglikely'=loglikely))
+   }
+  
+   cores=detectCores()
+  
+   cl <- makeCluster(cores[1]-1) # not to overload your computer logical cores
+   registerDoParallel(cl)
+  
+   # No SRL (default)
+  
+   AFM=sensitivity_perf(life_transactions.ml,T,F)
+   AFM = data.table(data.frame(do.call(cbind, unname(AFM))))
+   setnames(AFM,names(AFM),c('Accuracy','AUC','AIC','BIC','LogLikelihood'))
+   AFM$Model="AFM"
+   AFM$Ratio=seq(0.1,0.5,0.1)
+  
+   PFM=sensitivity_perf(life_transactions.ml,F,F)
+   PFM = data.table(data.frame(do.call(cbind, PFM)))
+   setnames(PFM,names(PFM),c('Accuracy','AUC','AIC','BIC','LogLikelihood'))
+   PFM$Model="PFM"
+   PFM$Ratio=seq(0.1,0.5,0.1)
+  
+   results = rbind(AFM,PFM)
+   results$Accuracy = as.numeric(results$Accuracy)
+   results$AUC = as.numeric(results$AUC)
+   results.mlt = reshape2::melt(results,id.vars=c("Model","Ratio"),value.name="Value",variable.name="Indicator")
+  
+   write.csv(results.mlt,"factor_models_perf.csv",row.names=F)
+  
+   # Check if SRL is more predictive
+  
+   set.seed(197)
+   AFM=sensitivity_perf(life_transactions.ml,T,T)
+   AFM = data.table(data.frame(do.call(cbind, unname(AFM))))
+   setnames(AFM,names(AFM),c('Accuracy','AUC'))
+   AFM$Model="AFM"
+   AFM$Ratio=seq(0.1,0.5,0.1)
+  
+   PFM=sensitivity_perf(life_transactions.ml,F,T)
+   PFM = data.table(data.frame(do.call(cbind, PFM)))
+   setnames(PFM,names(PFM),c('Accuracy','AUC'))
+   PFM$Model="PFM"
+   PFM$Ratio=seq(0.1,0.5,0.1)
+  
+   results = rbind(AFM,PFM)
+   results$Accuracy = as.numeric(results$Accuracy)
+   results$AUC = as.numeric(results$AUC)
+   results$AIC = as.numeric(results$AIC)
+   results$BIC = as.numeric(results$BIC)
+   results$LogLikelihood = as.numeric(results$LogLikelihood)
+   results.mlt = reshape2::melt(results,id.vars=c("Model","Ratio"),value.name="Value",variable.name="Indicator")
+  
+   write.csv(results.mlt,paste0(data_root,"factor_models_srl_perf.csv"),row.names=F)
+  
+   # stop cluster
+   stopCluster(cl)
+
+
+  # ROC to use for model comparion
+
+   roc_compare <- function(life_dataset){
+     #parallelise this computation
+     results.matrix <- foreach(i=seq(0.1,0.5,0.1), .combine=cbind, .packages=c('groupdata2','data.table','lme4','pROC','caret','optimx')) %dopar% { 
+       roc_test_afm_pfm <- function(training_set, testing_set){
+         training_set <- as.data.table(training_set)
+         training_set[,Opportunity.Scale:=scale(Opportunity)]
+         training_set[,Prev_Success.Scale:=scale(Prev_Success)]
+         training_set[,Prev_Failure.Scale:=scale(Prev_Failure)]
+  
+  
+         testing_set <- as.data.table(testing_set)
+         testing_set[,Opportunity.Scale:=scale(Opportunity)]
+         testing_set[,Prev_Success.Scale:=scale(Prev_Success)]
+         testing_set[,Prev_Failure.Scale:=scale(Prev_Failure)]
+  
+         model_afm <- glmer(Correct_First_Try~(1|Student)+KC+KC:Opportunity.Scale-1,
+                              family=binomial(),
+                              control=glmerControl(optimizer="bobyqa",optCtrl=list(maxfun=2e6)),
+                              data=training_set)
+         model_pfm <- glmer(Correct_First_Try~(1|Student)+KC+KC:Prev_Success.Scale-1+KC:Prev_Failure.Scale-1,
+                              family=binomial(),
+                              control=glmerControl(optimizer="bobyqa",optCtrl=list(maxfun=2e6)),
+                              data=training_set)
+  
+         predicted_afm=predict(model_afm,testing_set,type="response",allow.new.levels=T)
+         predicted_pfm=predict(model_pfm,testing_set,type="response",allow.new.levels=T)
+  
+         aucroc_afm=roc(predictor=predicted_afm,response=testing_set$Correct_First_Try)
+         aucroc_pfm=roc(predictor=predicted_pfm,response=testing_set$Correct_First_Try)
+  
+         roc_equal = roc.test(aucroc_afm, aucroc_pfm,alternative="less") # AUC of AFM is significantly lower than AUC of PFM)
+  
+         return(roc_equal$p.value)
+       }
+  
+       parts <- partition(life_dataset, p = i, id_col = 'Student', cat_col = 'KC')
+       test_set <- parts[[1]]
+       train_set <- parts[[2]]
+       model_accuracy = roc_test_afm_pfm(train_set,test_set)
+       model_accuracy
+     }
+  
+     return(results.matrix)
+   }
+  
+   cores=detectCores()
+  
+   cl <- makeCluster(cores[1]-1) # not to overload your computer's logical cores
+   registerDoParallel(cl)
+  
+   # ROC DeLong Test
+  
+   ROC_afm_pfm=roc_compare(life_transactions.ml)
+   ROC_Compare = data.table(
+     Ratio=seq(0.1,0.5,0.1),
+     P_Value=round(as.numeric(as.vector(ROC_afm_pfm)),4)
+   )
+  
+   write.csv(ROC_Compare,paste0(data_root,"delong_afm_pfm.csv"),row.names=F)
+  
+   #stop cluster
+   stopCluster(cl)
+  
+})
+```
+
+<br/>
+
+### PFM model diagnostics
+
+```{r echo=FALSE, results='asis', message=F, warning=F,  fig.width=6, fig.height=6}
+###Use PFM model
+pfm.model =glmer(Correct_First_Try~(1|Student)+KC+KC:Prev_Success+KC:Prev_Failure,family=binomial(),
+                 control=glmerControl(optimizer="bobyqa",optCtrl=list(maxfun=2e6)),nAGQ = 1,data=play_data)
+
+
+InterceptVariance <- as.numeric(VarCorr(pfm.model)[["Student"]])
+residVariance <- (15/16)^2 * pi^2 / 3 #L. Zeger, K. Y. Liang, and P. S. Albert. Models for longitudinal data: a generalized estimating equation approach. Biometrics, 44: 1049-1060 1988
+ICCLogit = InterceptVariance / (InterceptVariance + residVariance)
+
+cat(paste0("\nThe 'Student' variable accounts for ",round(ICCLogit*100,2),"% of the stochastic variation in the PFM model\n"))
+cat("\nL. Zeger, K. Y. Liang, and P. S. Albert. Models for longitudinal data: a generalized estimating equation approach. Biometrics, 44: 1049-1060 1988\n")
+
+play_data[,pearson:=residuals(pfm.model,type="pearson")]
+play_data[,hatvalues:=hatvalues(pfm.model)]
+
+play_data = play_data[pearson < 100.0 & pearson > -100.0, copy(.SD)]
+play_data = play_data[hatvalues < 100.0 & hatvalues > -100.0, copy(.SD)]
+
+pfm.coef = fixef(pfm.model)[grepl("^KCKC\\d{1,2}$",names(fixef(pfm.model)))]
+names(pfm.coef) = gsub('CKC','C',names(pfm.coef))
+
+item_difficulty = data.table(
+  'KC'=names(pfm.coef),
+  'Difficulty'=pfm.coef)
+
+item_difficulty = rbind(item_difficulty,data.table('KC'='KC1','Difficulty'=0.0))
+play_data[,Difficulty:=NULL]
+play_data = merge(play_data,item_difficulty,by='KC')
+play_data[,Item:=factor(Difficulty,
+                        levels = sort(unique(play_data$Difficulty)),
+                        labels = c(1:10),
+                        ordered = T)]
+cat("\n\n")
+resid_interact(pfm.model) 
+```
+
+<br/>
+
+### Minimum (Base) model
+
+```{r echo=FALSE, results='asis', message=F, warning=F,  fig.width=6, fig.height=6}
+
+##Regression model
+play_data = play_data[Opportunity < 15,copy(.SD)]
+play_data[,Opportunity.Scale:=scale(Opportunity)]
+play_data[,Prev_Success.Scale:=scale(Prev_Success)]
+play_data[,Prev_Failure.Scale:=scale(Prev_Failure)]
+play_data[,KC:=factor(KC,levels=paste0("KC",1:10))]
+play_data <- within(play_data, KC <- relevel(KC, ref = 'KC1'))
+
+play_data[,Feedback:=factor(as.character(Feedback),levels = c("None","Essential","Reflective","Detailed"))]
+play_data[,Gap_Type:=factor(as.character(Gap_Type),levels=c("None","<= 1 Hour","<= 1 Day", "<= 1 Week", "<= 1 Month","> 1 Month"))]
+play_data <- within(play_data, Gap_Type <- relevel(Gap_Type, ref = 'None'))
+play_data <- within(play_data, Feedback <- relevel(Feedback, ref = 'None'))
+
+
+
+pfm.model.reg_min =glmer(Correct_First_Try~(1|Student)+KC+Group+ETAT+KC:Prev_Success.Scale+KC:Prev_Failure.Scale+
+                           Opportunity.Scale:Feedback+Opportunity.Scale:Time.Scale+Opportunity.Scale:Gap_Type,
+                         family=binomial(),control=glmerControl(optimizer="bobyqa",optCtrl=list(maxfun=2e6)),nAGQ = 10,data=play_data)
+
+play_data[,PFM.Prediction:=predict(pfm.model.reg_min,newdata=play_data,type="response")]
+```
+
+<br/>
+
+### Rash tests
+
+#### Person-Item Map
+
+```{r echo=FALSE, results='asis', message=F, warning=F,  fig.width=6, fig.height=6}
+
+pfm.coef = fixef(pfm.model)[grepl("^KCKC\\d{1,2}$",names(fixef(pfm.model)))]
+names(pfm.coef) = gsub('CKC','C',names(pfm.coef))
+
+item_difficulty = data.table(
+  'KC'=names(pfm.coef),
+  'Difficulty'=pfm.coef)
+item_difficulty[,KC:=factor(KC,levels=paste0("KC",2:10),ordered = T)]
+
+rasch_data = play_data[Session_Complete==1 & Try==1,copy(.SD)]
+rasch_data_pre = rasch_data %>% group_by(Student,KC) %>% slice(1)
+rasch_data_pre = as.data.table(rasch_data_pre)
+rasch_data_life = rasch_data_pre[,copy(.SD),.SDcols=c("Student","KC","Correct")] 
+rasch_data_life = rasch_data_life %>% pivot_wider(names_from = KC, values_from=Correct)
+rasch_data_life = as.data.table(rasch_data_life)
+rasch_data_life[,Student:=NULL]
+
+#Fit RM 
+rm.res <- RM(rasch_data_life)
+#summary(rm.res)
+plotPImap(rm.res)
+```
+
+#### IRT model fit
+
+```{r echo=FALSE, results='asis', message=F, warning=F,  fig.width=6, fig.height=6}
+
+LRtest(rm.res, splitcr = "mean") #The p-value of the LR-statistic suggests a satisfactory model fit
+lr <- LRtest(rm.res, se = T)
+plotGOF(lr, conf = list(), xlim = c(-1.5, 1.5), ylim = c(-1.5, 1.5))
+
+```
+
+#### Infit T-statistic
+
+Pathway maps are useful for identifying misfitting items or misfitting persons. Items or people should ideally have a infit t-statistic lying between about -2 and +2, and these values are marked
+```{r echo=FALSE, results='asis', message=F, warning=F,  fig.width=6, fig.height=6}
+
+plotPWmap(rm.res)
+
+```
+
+#### Plot visualizing the item characteristic curves for LIFE
+
+```{r echo=FALSE, results='asis', message=F, warning=F,  fig.width=6, fig.height=6}
+plotjointICC(rm.res, legpos = "topleft")
+
+```
+
+
+#### Item difficulty
+
+```{r echo=FALSE, results='asis', message=F, warning=F,  fig.width=6, fig.height=6}
+##Explanatory plots
+bplot = ggplot(aes(x=KC,y=Difficulty),data=item_difficulty) +
+  geom_bar(stat='identity') +
+  theme_bw(base_family="Corbel") + 
+  ylab('Difficulty Rating') +
+  coord_flip() +
+  #scale_y_continuous(breaks=seq(0.0,1,.15), limits=c(0.0,1)) +
+  ggtitle("Performance Factor Model: Item Difficulty Rating (Ref: KC1)")
+print(bplot)
+```
+
+
+### Compare Base and Detailed PFM model
+
+```{r echo=FALSE, results='asis', message=F, warning=F,  fig.width=6, fig.height=6}
+
+# Regression model
+pfm.model.reg_min =glmer(Correct_First_Try~(1|Student)+KC+Group+ETAT+KC:Prev_Success.Scale+KC:Prev_Failure.Scale+
+                           Opportunity.Scale:Feedback+Opportunity.Scale:Time.Scale+Opportunity.Scale:Gap_Type,
+                         family=binomial(),control=glmerControl(optimizer="bobyqa",optCtrl=list(maxfun=2e6)),
+                         nAGQ = 10,data=play_data)
+
+pfm.model.reg_max =glmer(Correct_First_Try~(1|Student)+KC+Group+ETAT+KC:Prev_Success.Scale+KC:Prev_Failure.Scale+
+                           Opportunity.Scale:Feedback+Opportunity.Scale:Time.Scale+Opportunity.Scale:Gap_Type+Opportunity.Scale:SRL+SRL:Time.Scale,
+                         family=binomial(),control=glmerControl(optimizer="bobyqa",optCtrl=list(maxfun=2e6)),
+                         nAGQ=10,data=play_data[!is.na(SRL),copy(.SD)])
+
+afm.model.reg_max =glmer(Correct_First_Try~(1|Student)+KC+Group+ETAT+KC:Opportunity.Scale+Opportunity.Scale:Feedback+
+                           Opportunity.Scale:Time.Scale+Opportunity.Scale:Gap_Type+Opportunity.Scale:SRL+SRL:Time.Scale,
+                         family=binomial(),control=glmerControl(optimizer="bobyqa",optCtrl=list(maxfun=2e6)),
+                         nAGQ = 10,data=play_data[!is.na(SRL),copy(.SD)])
+
+InterceptVariance <- as.numeric(VarCorr(pfm.model.reg_min)[["Student"]])
+residVariance <- (15/16)^2 * pi^2 / 3 
+ICCLogit = InterceptVariance / (InterceptVariance + residVariance)
+cat(paste0("\nThe 'Student' variable accounts for ",round(ICCLogit*100,2),"% of the stochastic variation in the base PFM model\n"))
+
+InterceptVariance <- as.numeric(VarCorr(pfm.model.reg_max)[["Student"]])
+ICCLogit = InterceptVariance / (InterceptVariance + residVariance)
+cat(paste0("\nThe 'Student' variable accounts for ",round(ICCLogit*100,2),"% of the stochastic variation in the detailed PFM model\n"))
+
+temp_ds = play_data[!is.na(SRL),copy(.SD)]
+temp_ds[,PFM_Pred:=predict(pfm.model.reg_max,newdata=temp_ds,type="response")]
+temp_ds[,AFM_Pred:=predict(afm.model.reg_max,newdata=temp_ds,type="response")]
+
+cat(paste0("\nAFM Brier Score: ",round(BrierScore(temp_ds$AFM_Pred,temp_ds$Correct_First_Try),4),"\n"))
+cat(paste0("\nPFM Brier Score: ",round(BrierScore(temp_ds$PFM_Pred,temp_ds$Correct_First_Try),4),"\n"))
+cat("\n\n")
+
+play_data[,PFM.Prediction:=predict(pfm.model.reg_min,newdata=play_data,type="response")]
+
+temp_ds = play_data[Gap_Type!='None',copy(.SD)]
+cplot = ggplot(aes(x=Opportunity,y=PFM.Prediction,group=Feedback,color=Feedback,linetype=Feedback),data=temp_ds) +
+  scale_linetype_manual(values=c("solid","dashed","dotted","dotdash")) +
+  theme_minimal(base_family="Corbel") +
+  scale_color_aaas() +
+  ylab('Learning Rate') +
+  theme(legend.position="bottom",
+        legend.text = element_text(margin=margin(r= 10,unit="pt")),
+        legend.key.width = unit(4, "line"),
+        legend.title=element_text(size=14, face="bold")) +
+  guides(linetype=guide_legend(nrow=2,byrow=TRUE)) +
+  scale_x_continuous(breaks=seq(0,14,3), limits=c(0,14)) +
+  scale_y_continuous(breaks=seq(0.0,1,.25), limits=c(0.0,1)) +
+  geom_smooth(se=F,method='loess') +
+  ggtitle("Performance Factor Model: Feedback Effect on Learning Curves")
+print(cplot)
+#ggsave("Figure 10.tiff",compression="lzw",bplot,dpi=1200,width=18,height=18,units="cm")
+
+
+
+temp_ds = play_data[Gap_Type!='None',copy(.SD)]
+dplot = ggplot(aes(x=Opportunity,y=PFM.Prediction,group=Feedback,color=Feedback,linetype=Feedback),data=temp_ds) +
+  scale_linetype_manual(values=c("solid","dashed","dotted","dotdash")) +
+  theme_minimal(base_family="Corbel") +
+  facet_wrap(~Gap_Type,ncol=2) +
+  scale_color_aaas() +
+  ylab('Learning Rate') +
+  theme(legend.position="bottom",
+        legend.text = element_text(margin=margin(r= 10,unit="pt")),
+        legend.key.width = unit(4, "line"),
+        legend.title=element_text(size=14, face="bold")) +
+  guides(linetype=guide_legend(nrow=2,byrow=TRUE)) +
+  scale_x_continuous(breaks=seq(0,14,3), limits=c(0,14)) +
+  scale_y_continuous(breaks=seq(0.0,1,.25), limits=c(0.0,1)) +
+  geom_smooth(se=F,method='loess') +
+  ggtitle("Performance Factor Model: Feedback Effect on Learning Curves\n By Spacing")
+print(dplot)
+
+temp_ds = play_data[!is.na(SRL),copy(.SD)]
+temp_ds[,PFM.Prediction:=predict(pfm.model.reg_max,newdata=temp_ds,type="response")]
+temp_ds[,SRL:=factor(as.character(SRL),
+                   levels=c("Low SRL profile", "Average SRL profile", "Above Average SRL profile","High SRL profile"),
+                   ordered = T)]
+
+eplot = ggplot(aes(x=Opportunity,y=PFM.Prediction,group=Feedback,color=Feedback,linetype=Feedback),data=temp_ds) +
+  scale_linetype_manual(values=c("solid","dashed","dotted","dotdash")) +
+  theme_minimal(base_family="Corbel") +
+  facet_wrap(~SRL,ncol=2) +
+  scale_color_aaas() +
+  ylab('Learning Rate') +
+  theme(legend.position="bottom",
+        legend.text = element_text(margin=margin(r= 10,unit="pt")),
+        legend.key.width = unit(4, "line"),
+        legend.title=element_text(size=14, face="bold")) +
+  guides(linetype=guide_legend(nrow=2,byrow=TRUE)) +
+  scale_x_continuous(breaks=seq(0,14,3), limits=c(0,14)) +
+  scale_y_continuous(breaks=seq(0.0,1,.25), limits=c(0.0,1)) +
+  geom_smooth(se=F,method='loess',span = 0.90) +
+  ggtitle("Performance Factor Model: Feedback Effect on Learning Curves By SRL profile")
+print(eplot)
+#ggsave("Figure 11.tiff",compression="lzw",bplot,dpi=1200,width=18,height=18,units="cm")
+
+cat("\n\n")
+cat("\n\n")
+
+tab_model(pfm.model.reg_min,pfm.model.reg_max)
+
+```
+
+</font>
+<p/>
