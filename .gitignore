@@ -4,6 +4,8 @@
 *.xlsx
 *.png
 *.h5
+ml-100k
+ml-1m
 *.Rhistory
 *.RData
-
+twitter.txt
