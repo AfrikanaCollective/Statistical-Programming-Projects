@@ -9,3 +9,5 @@ ml-1m
 *.Rhistory
 *.RData
 twitter.txt
+firebaseConfig.txt
+life-firebase-adminsdk.json
