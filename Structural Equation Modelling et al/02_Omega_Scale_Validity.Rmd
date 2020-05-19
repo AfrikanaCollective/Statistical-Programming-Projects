@@ -1,0 +1,251 @@
+---
+title: "SRL Omega Values"
+author: "Timothy Tuti"
+date: "26/09/2019"
+output: 
+  pdf_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE,message=F, warning=F}
+knitr::opts_chunk$set(echo = FALSE)
+library(psych)
+library(kableExtra)
+library(data.table)
+library(extrafont)
+library(corrr)
+library(lavaan)
+library(sjPlot)
+library(sjmisc)
+library(sjlabelled)
+loadfonts(device="win")
+par(family='Corbel')
+```
+
+## Calculate Reliability Scores for SRL Scale
+
+Load data from folder
+
+```{r}
+setwd("D:/Statistical Programming Projects/Structural Equation Modelling et al/")
+srl_data = data.table(read.csv("Omega.csv"))
+srl_data[,c("Cadre_1", "Cadre_2", "Cadre_3", "Cadre_4", "Level_1", "Level_2", 
+"Level_3", "Age_1", "Age_2", "Age_3", "Age_4", "Experience","Platform","User"):=NULL]
+
+kable(head(srl_data)) %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"),full_width=T)
+
+```
+
+
+## Average item total correlation
+<p/>
+<font size="3" face="Corbel">
+```{r echo=FALSE, warning=FALSE, message=FALSE, results = 'asis'}
+srl_inter_rater = srl_data[,copy(.SD)]
+srl_inter_rater[,Score:=rowMeans(.SD)]
+avg_item_tot_corr = srl_inter_rater %>% correlate() %>% focus(Score) 
+avg_item_tot_corr$Score= round(avg_item_tot_corr$Score,3)
+
+kable(avg_item_tot_corr) %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"),full_width=F)
+
+cat(paste0("Item Correlation (Average): ",mean(avg_item_tot_corr$Score)))
+```
+</font>
+<p/>
+
+### Composite Reliability
+<p/>
+<font size="3" face="Corbel">
+```{r echo=FALSE, warning=FALSE, message=FALSE, results = 'asis'}
+items <- paste(names(srl_data[,copy(.SD),.SDcols=c('I1','I2','I3')]), collapse = "+")
+model <- paste("extraversion", items, sep = "=~")
+
+fit <- cfa(model, data = srl_data[,copy(.SD),.SDcols=c('I1','I2','I3')])
+sl <- standardizedSolution(fit)
+sl <- sl$est.std[sl$op == "=~"]
+names(sl) <- names(srl_data[,copy(.SD),.SDcols=c('I1','I2','I3')])
+re <- 1 - sl^2
+composite_reliability = sum(sl)^2 / (sum(sl)^2 + sum(re))
+cat(paste0("Composite Reliability (Goal Setting): ",round(composite_reliability,3)))
+```
+</font>
+<p/>
+
+<p/>
+<font size="3" face="Corbel">
+```{r echo=FALSE, warning=FALSE, message=FALSE, results = 'asis'}
+items <- paste(names(srl_data[,copy(.SD),.SDcols=c('I4','I5','I6','I7')]), collapse = "+")
+model <- paste("extraversion", items, sep = "=~")
+
+fit <- cfa(model, data = srl_data[,copy(.SD),.SDcols=c('I4','I5','I6','I7')])
+sl <- standardizedSolution(fit)
+sl <- sl$est.std[sl$op == "=~"]
+names(sl) <- names(srl_data[,copy(.SD),.SDcols=c('I4','I5','I6','I7')])
+re <- 1 - sl^2
+composite_reliability = sum(sl)^2 / (sum(sl)^2 + sum(re))
+cat(paste0("Composite Reliability (Strategic Learning): ",round(composite_reliability,3)))
+```
+</font>
+<p/>
+
+
+<p/>
+<font size="3" face="Corbel">
+```{r echo=FALSE, warning=FALSE, message=FALSE, results = 'asis'}
+items <- paste(names(srl_data[,copy(.SD),.SDcols=c('I8','I9','I10','I11')]), collapse = "+")
+model <- paste("extraversion", items, sep = "=~")
+
+fit <- cfa(model, data = srl_data[,copy(.SD),.SDcols=c('I8','I9','I10','I11')])
+sl <- standardizedSolution(fit)
+sl <- sl$est.std[sl$op == "=~"]
+names(sl) <- names(srl_data[,copy(.SD),.SDcols=c('I8','I9','I10','I11')])
+re <- 1 - sl^2
+composite_reliability = sum(sl)^2 / (sum(sl)^2 + sum(re))
+cat(paste0("Composite Reliability (Task Strategy): ",round(composite_reliability,3)))
+```
+</font>
+<p/>
+
+
+<p/>
+<font size="3" face="Corbel">
+```{r echo=FALSE, warning=FALSE, message=FALSE, results = 'asis'}
+items <- paste(names(srl_data[,copy(.SD),.SDcols=c('I8','I12','I13')]), collapse = "+")
+model <- paste("extraversion", items, sep = "=~")
+
+fit <- cfa(model, data = srl_data[,copy(.SD),.SDcols=c('I8','I12','I13')])
+sl <- standardizedSolution(fit)
+sl <- sl$est.std[sl$op == "=~"]
+names(sl) <- names(srl_data[,copy(.SD),.SDcols=c('I8','I12','I13')])
+re <- 1 - sl^2
+composite_reliability = sum(sl)^2 / (sum(sl)^2 + sum(re))
+cat(paste0("Composite Reliability (Elaboration): ",round(composite_reliability,3)))
+```
+</font>
+<p/>
+
+
+<p/>
+<font size="3" face="Corbel">
+```{r echo=FALSE, warning=FALSE, message=FALSE, results = 'asis'}
+items <- paste(names(srl_data[,copy(.SD),.SDcols=c('I5','I14','I15')]), collapse = "+")
+model <- paste("extraversion", items, sep = "=~")
+
+fit <- cfa(model, data = srl_data[,copy(.SD),.SDcols=c('I5','I14','I15')])
+sl <- standardizedSolution(fit)
+sl <- sl$est.std[sl$op == "=~"]
+names(sl) <- names(srl_data[,copy(.SD),.SDcols=c('I5','I14','I15')])
+re <- 1 - sl^2
+composite_reliability = sum(sl)^2 / (sum(sl)^2 + sum(re))
+cat(paste0("Composite Reliability (Self-Evaluation): ",round(composite_reliability,3)))
+```
+</font>
+<p/>
+
+<p/>
+<font size="3" face="Corbel">
+```{r echo=FALSE, warning=FALSE, message=FALSE, results = 'asis'}
+items <- paste(names(srl_data[,copy(.SD),.SDcols=c('I16','I17','I18','I19','I20')]), collapse = "+")
+model <- paste("extraversion", items, sep = "=~")
+
+fit <- cfa(model, data = srl_data[,copy(.SD),.SDcols=c('I16','I17','I18','I19','I20')])
+sl <- standardizedSolution(fit)
+sl <- sl$est.std[sl$op == "=~"]
+names(sl) <- names(srl_data[,copy(.SD),.SDcols=c('I16','I17','I18','I19','I20')])
+re <- 1 - sl^2
+composite_reliability = sum(sl)^2 / (sum(sl)^2 + sum(re))
+cat(paste0("Composite Reliability (Help-Seeking): ",round(composite_reliability,3)))
+```
+</font>
+<p/>
+
+
+## Total SRL scale Omega Score
+
+### Full Scale
+<p/>
+<font size="3" face="Corbel">
+```{r echo=FALSE, warning=FALSE, message=FALSE, results = 'asis'}
+omega_total = omega(m = srl_data, nfactors = 1, fm = "pa", n.iter = 1, p = 0.05, title = "Omega", plot = FALSE, n.obs = nrow(srl_data))$omega.tot
+
+cat(paste0("Omega (SRL): ",round(omega_total,3)))
+```
+</font>
+<p/>
+
+### SRL sub-scale Omega Score
+
+<p/>
+<font size="3" face="Corbel">
+```{r echo=FALSE, warning=FALSE, message=FALSE, results = 'asis'}
+omega_total=omega(m=srl_data[,copy(.SD),.SDcols=c('I1','I2','I3')],nfactors=1,fm="pa",n.iter=1,p=0.05,title="Omega",plot=FALSE,n.obs=nrow(srl_data))$omega.tot
+
+cat(paste0("Omega (Goal Setting): ",round(omega_total,3)))
+```
+</font>
+<p/>
+<p/>
+
+<p/>
+<font size="3" face="Corbel">
+```{r echo=FALSE, warning=FALSE, message=FALSE, results = 'asis'}
+omega_total=omega(m=srl_data[,copy(.SD),.SDcols=c('I4','I5','I6','I7')],nfactors=1,fm="pa",n.iter=1,p=0.05,title="Omega",
+                  plot=FALSE,n.obs=nrow(srl_data))$omega.tot
+
+cat(paste0("Omega (Strategic Learning): ",round(omega_total,3)))
+```
+</font>
+<p/>
+<p/>
+
+<p/>
+<font size="3" face="Corbel">
+```{r echo=FALSE, warning=FALSE, message=FALSE, results = 'asis'}
+omega_total=omega(m=srl_data[,copy(.SD),.SDcols=c('I8','I9','I10','I11')],nfactors=1,fm="pa",n.iter=1,p=0.05,title="Omega",
+                  plot=FALSE,n.obs=nrow(srl_data))$omega.tot
+
+cat(paste0("Omega (Task Strategy): ",round(omega_total,3)))
+```
+</font>
+<p/>
+<p/>
+
+
+<p/>
+<font size="3" face="Corbel">
+```{r echo=FALSE, warning=FALSE, message=FALSE, results = 'asis'}
+omega_total=omega(m=srl_data[,copy(.SD),.SDcols=c('I8','I12','I13')],nfactors=1,fm="pa",n.iter=1,p=0.05,title="Omega",plot=FALSE,n.obs=nrow(srl_data))$omega.tot
+
+cat(paste0("Omega (Elaboration): ",round(omega_total,3)))
+```
+</font>
+<p/>
+<p/>
+
+
+<p/>
+<font size="3" face="Corbel">
+```{r echo=FALSE, warning=FALSE, message=FALSE, results = 'asis'}
+omega_total=omega(m=srl_data[,copy(.SD),.SDcols=c('I5','I14','I15')],nfactors=1,fm="pa",n.iter=1,p=0.05,title="Omega",plot=FALSE,n.obs=nrow(srl_data))$omega.tot
+
+cat(paste0("Omega (Self Evaluation): ",round(omega_total,3)))
+```
+</font>
+<p/>
+<p/>
+
+
+<p/>
+<font size="3" face="Corbel">
+```{r echo=FALSE, warning=FALSE, message=FALSE, results = 'asis'}
+omega_total=omega(m=srl_data[,copy(.SD),.SDcols=c('I16','I17','I18','I19','I20')],nfactors=1,fm="pa",n.iter=1,p=0.05,title="Omega",
+                  plot=FALSE,n.obs=nrow(srl_data))$omega.tot
+
+cat(paste0("Omega (Help-Seeking): ",round(omega_total,3)))
+```
+</font>
+<p/>
+
+

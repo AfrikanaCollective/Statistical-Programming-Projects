@@ -1,0 +1,1229 @@
+Mplus VERSION 7
+MUTHEN & MUTHEN
+08/16/2019   9:58 PM
+
+INPUT INSTRUCTIONS
+
+  Data:
+      File is srl.txt;
+
+  Variable:
+      Names are
+        Platform GoalPers GoalReal GoalHelp
+        StrAdapt StrAlt StrAsk StrPlan
+        TskRel TskChnge TskDiff TskNotes
+        ElbMatch ElbExp ScoreHlp ScoreLrn
+        HlpFig HlpNHelp HlpPeer HlpCollg HlpDiff
+        Users;
+      Missing are
+         all(-999);
+      Usevariables are
+         Platform-HlpDiff;
+      Classes ARE SRL(2);
+
+  Analysis:
+      OPTSEED=42;
+      Type=MIXTURE;
+      !STARTS=4000 40;
+      LRTBOOT= 20;
+      LRTSTARTS=2 1 4000 40;
+      PROCESSORS=4;
+
+  Model:
+      %OVERALL%
+      SRL ON Platform;
+
+  Output:
+      sampstat residual TECH11 TECH14;
+
+  Plot:
+      type is plot3;
+      Series=GoalPers-HlpDiff(*);
+
+  savedata:
+      File=lpa_probs.txt;
+      save=cprob;
+
+
+
+*** WARNING in MODEL command
+  Variable is uncorrelated with all other variables within class:  GOALPERS
+*** WARNING in MODEL command
+  Variable is uncorrelated with all other variables within class:  GOALREAL
+*** WARNING in MODEL command
+  Variable is uncorrelated with all other variables within class:  GOALHELP
+*** WARNING in MODEL command
+  Variable is uncorrelated with all other variables within class:  STRADAPT
+*** WARNING in MODEL command
+  Variable is uncorrelated with all other variables within class:  STRALT
+*** WARNING in MODEL command
+  Variable is uncorrelated with all other variables within class:  STRASK
+*** WARNING in MODEL command
+  Variable is uncorrelated with all other variables within class:  STRPLAN
+*** WARNING in MODEL command
+  Variable is uncorrelated with all other variables within class:  TSKREL
+*** WARNING in MODEL command
+  Variable is uncorrelated with all other variables within class:  TSKCHNGE
+*** WARNING in MODEL command
+  Variable is uncorrelated with all other variables within class:  TSKDIFF
+*** WARNING in MODEL command
+  Variable is uncorrelated with all other variables within class:  TSKNOTES
+*** WARNING in MODEL command
+  Variable is uncorrelated with all other variables within class:  ELBMATCH
+*** WARNING in MODEL command
+  Variable is uncorrelated with all other variables within class:  ELBEXP
+*** WARNING in MODEL command
+  Variable is uncorrelated with all other variables within class:  SCOREHLP
+*** WARNING in MODEL command
+  Variable is uncorrelated with all other variables within class:  SCORELRN
+*** WARNING in MODEL command
+  Variable is uncorrelated with all other variables within class:  HLPFIG
+*** WARNING in MODEL command
+  Variable is uncorrelated with all other variables within class:  HLPNHELP
+*** WARNING in MODEL command
+  Variable is uncorrelated with all other variables within class:  HLPPEER
+*** WARNING in MODEL command
+  Variable is uncorrelated with all other variables within class:  HLPCOLLG
+*** WARNING in MODEL command
+  Variable is uncorrelated with all other variables within class:  HLPDIFF
+*** WARNING in MODEL command
+  At least one variable is uncorrelated with all other variables within class.
+  Check that this is what is intended.
+  21 WARNING(S) FOUND IN THE INPUT INSTRUCTIONS
+
+
+
+
+SUMMARY OF ANALYSIS
+
+Number of groups                                                 1
+Number of observations                                         264
+
+Number of dependent variables                                   20
+Number of independent variables                                  1
+Number of continuous latent variables                            0
+Number of categorical latent variables                           1
+
+Observed dependent variables
+
+  Continuous
+   GOALPERS    GOALREAL    GOALHELP    STRADAPT    STRALT      STRASK
+   STRPLAN     TSKREL      TSKCHNGE    TSKDIFF     TSKNOTES    ELBMATCH
+   ELBEXP      SCOREHLP    SCORELRN    HLPFIG      HLPNHELP    HLPPEER
+   HLPCOLLG    HLPDIFF
+
+Observed independent variables
+   PLATFORM
+
+Categorical latent variables
+   SRL
+
+
+Estimator                                                      MLR
+Information matrix                                        OBSERVED
+Optimization Specifications for the Quasi-Newton Algorithm for
+Continuous Outcomes
+  Maximum number of iterations                                 100
+  Convergence criterion                                  0.100D-05
+Optimization Specifications for the EM Algorithm
+  Maximum number of iterations                                 500
+  Convergence criteria
+    Loglikelihood change                                 0.100D-06
+    Relative loglikelihood change                        0.100D-06
+    Derivative                                           0.100D-05
+Optimization Specifications for the M step of the EM Algorithm for
+Categorical Latent variables
+  Number of M step iterations                                    1
+  M step convergence criterion                           0.100D-05
+  Basis for M step termination                           ITERATION
+Optimization Specifications for the M step of the EM Algorithm for
+Censored, Binary or Ordered Categorical (Ordinal), Unordered
+Categorical (Nominal) and Count Outcomes
+  Number of M step iterations                                    1
+  M step convergence criterion                           0.100D-05
+  Basis for M step termination                           ITERATION
+  Maximum value for logit thresholds                            15
+  Minimum value for logit thresholds                           -15
+  Minimum expected cell size for chi-square              0.100D-01
+Maximum number of iterations for H1                           2000
+Convergence criterion for H1                             0.100D-03
+Optimization algorithm                                         EMA
+Random Starts Specifications
+  Random seed for analysis                                      42
+
+Input data file(s)
+  srl.txt
+Input data format  FREE
+
+
+SUMMARY OF DATA
+
+     Number of missing data patterns             1
+     Number of y missing data patterns           1
+     Number of u missing data patterns           0
+
+
+COVARIANCE COVERAGE OF DATA
+
+Minimum covariance coverage value   0.100
+
+
+     PROPORTION OF DATA PRESENT FOR Y
+
+
+           Covariance Coverage
+              GOALPERS      GOALREAL      GOALHELP      STRADAPT      STRALT
+              ________      ________      ________      ________      ________
+ GOALPERS       1.000
+ GOALREAL       1.000         1.000
+ GOALHELP       1.000         1.000         1.000
+ STRADAPT       1.000         1.000         1.000         1.000
+ STRALT         1.000         1.000         1.000         1.000         1.000
+ STRASK         1.000         1.000         1.000         1.000         1.000
+ STRPLAN        1.000         1.000         1.000         1.000         1.000
+ TSKREL         1.000         1.000         1.000         1.000         1.000
+ TSKCHNGE       1.000         1.000         1.000         1.000         1.000
+ TSKDIFF        1.000         1.000         1.000         1.000         1.000
+ TSKNOTES       1.000         1.000         1.000         1.000         1.000
+ ELBMATCH       1.000         1.000         1.000         1.000         1.000
+ ELBEXP         1.000         1.000         1.000         1.000         1.000
+ SCOREHLP       1.000         1.000         1.000         1.000         1.000
+ SCORELRN       1.000         1.000         1.000         1.000         1.000
+ HLPFIG         1.000         1.000         1.000         1.000         1.000
+ HLPNHELP       1.000         1.000         1.000         1.000         1.000
+ HLPPEER        1.000         1.000         1.000         1.000         1.000
+ HLPCOLLG       1.000         1.000         1.000         1.000         1.000
+ HLPDIFF        1.000         1.000         1.000         1.000         1.000
+ PLATFORM       1.000         1.000         1.000         1.000         1.000
+
+
+           Covariance Coverage
+              STRASK        STRPLAN       TSKREL        TSKCHNGE      TSKDIFF
+              ________      ________      ________      ________      ________
+ STRASK         1.000
+ STRPLAN        1.000         1.000
+ TSKREL         1.000         1.000         1.000
+ TSKCHNGE       1.000         1.000         1.000         1.000
+ TSKDIFF        1.000         1.000         1.000         1.000         1.000
+ TSKNOTES       1.000         1.000         1.000         1.000         1.000
+ ELBMATCH       1.000         1.000         1.000         1.000         1.000
+ ELBEXP         1.000         1.000         1.000         1.000         1.000
+ SCOREHLP       1.000         1.000         1.000         1.000         1.000
+ SCORELRN       1.000         1.000         1.000         1.000         1.000
+ HLPFIG         1.000         1.000         1.000         1.000         1.000
+ HLPNHELP       1.000         1.000         1.000         1.000         1.000
+ HLPPEER        1.000         1.000         1.000         1.000         1.000
+ HLPCOLLG       1.000         1.000         1.000         1.000         1.000
+ HLPDIFF        1.000         1.000         1.000         1.000         1.000
+ PLATFORM       1.000         1.000         1.000         1.000         1.000
+
+
+           Covariance Coverage
+              TSKNOTES      ELBMATCH      ELBEXP        SCOREHLP      SCORELRN
+              ________      ________      ________      ________      ________
+ TSKNOTES       1.000
+ ELBMATCH       1.000         1.000
+ ELBEXP         1.000         1.000         1.000
+ SCOREHLP       1.000         1.000         1.000         1.000
+ SCORELRN       1.000         1.000         1.000         1.000         1.000
+ HLPFIG         1.000         1.000         1.000         1.000         1.000
+ HLPNHELP       1.000         1.000         1.000         1.000         1.000
+ HLPPEER        1.000         1.000         1.000         1.000         1.000
+ HLPCOLLG       1.000         1.000         1.000         1.000         1.000
+ HLPDIFF        1.000         1.000         1.000         1.000         1.000
+ PLATFORM       1.000         1.000         1.000         1.000         1.000
+
+
+           Covariance Coverage
+              HLPFIG        HLPNHELP      HLPPEER       HLPCOLLG      HLPDIFF
+              ________      ________      ________      ________      ________
+ HLPFIG         1.000
+ HLPNHELP       1.000         1.000
+ HLPPEER        1.000         1.000         1.000
+ HLPCOLLG       1.000         1.000         1.000         1.000
+ HLPDIFF        1.000         1.000         1.000         1.000         1.000
+ PLATFORM       1.000         1.000         1.000         1.000         1.000
+
+
+           Covariance Coverage
+              PLATFORM
+              ________
+ PLATFORM       1.000
+
+
+SAMPLE STATISTICS
+
+
+     ESTIMATED SAMPLE STATISTICS
+
+
+           Means
+              GOALPERS      GOALREAL      GOALHELP      STRADAPT      STRALT
+              ________      ________      ________      ________      ________
+ 1              3.928         3.792         3.996         3.818         3.216
+
+
+           Means
+              STRASK        STRPLAN       TSKREL        TSKCHNGE      TSKDIFF
+              ________      ________      ________      ________      ________
+ 1              3.621         3.307         4.034         3.587         2.265
+
+
+           Means
+              TSKNOTES      ELBMATCH      ELBEXP        SCOREHLP      SCORELRN
+              ________      ________      ________      ________      ________
+ 1              3.273         3.727         4.242         3.962         4.231
+
+
+           Means
+              HLPFIG        HLPNHELP      HLPPEER       HLPCOLLG      HLPDIFF
+              ________      ________      ________      ________      ________
+ 1              3.129         3.629         2.689         2.765         2.235
+
+
+           Means
+              PLATFORM
+              ________
+ 1              0.303
+
+
+           Covariances
+              GOALPERS      GOALREAL      GOALHELP      STRADAPT      STRALT
+              ________      ________      ________      ________      ________
+ GOALPERS       1.786
+ GOALREAL       1.284         1.741
+ GOALHELP       1.155         1.340         1.610
+ STRADAPT       0.938         1.167         1.234         1.747
+ STRALT         0.690         0.821         0.732         0.854         2.056
+ STRASK         0.954         0.940         0.866         0.836         0.646
+ STRPLAN        0.890         0.954         0.869         0.810         0.813
+ TSKREL         0.741         0.848         0.761         0.654         0.667
+ TSKCHNGE       0.834         0.872         0.783         0.792         0.892
+ TSKDIFF        0.144         0.070         0.107         0.230         0.428
+ TSKNOTES       0.789         0.883         0.774         0.815         0.638
+ ELBMATCH       0.742         0.989         0.851         0.750         0.699
+ ELBEXP         0.574         0.668         0.743         0.809         0.576
+ SCOREHLP       0.728         0.791         0.780         0.773         0.489
+ SCORELRN       0.789         0.810         0.891         0.853         0.477
+ HLPFIG         0.021         0.122         0.122         0.209         0.264
+ HLPNHELP       0.280         0.351         0.370         0.410         0.440
+ HLPPEER        0.281         0.261         0.196         0.156         0.427
+ HLPCOLLG       0.101         0.129         0.052         0.075         0.335
+ HLPDIFF        0.221         0.235         0.198         0.259         0.552
+ PLATFORM      -0.240        -0.278        -0.344        -0.293        -0.130
+
+
+           Covariances
+              STRASK        STRPLAN       TSKREL        TSKCHNGE      TSKDIFF
+              ________      ________      ________      ________      ________
+ STRASK         2.099
+ STRPLAN        1.343         2.251
+ TSKREL         0.922         0.804         1.571
+ TSKCHNGE       0.863         0.926         1.078         1.803
+ TSKDIFF        0.078         0.396         0.196         0.409         1.975
+ TSKNOTES       0.963         1.299         0.741         0.791         0.318
+ ELBMATCH       0.806         1.216         0.824         0.819         0.254
+ ELBEXP         0.615         0.634         0.674         0.536         0.057
+ SCOREHLP       0.853         0.890         0.611         0.587         0.120
+ SCORELRN       0.758         0.607         0.644         0.622         0.007
+ HLPFIG         0.268         0.139         0.121         0.277         0.549
+ HLPNHELP       0.397         0.337         0.149         0.381         0.250
+ HLPPEER        0.496         0.747         0.139         0.292         0.556
+ HLPCOLLG       0.479         0.845         0.038         0.320         0.600
+ HLPDIFF        0.244         0.549         0.090         0.370         0.631
+ PLATFORM      -0.139        -0.101        -0.177        -0.201        -0.016
+
+
+           Covariances
+              TSKNOTES      ELBMATCH      ELBEXP        SCOREHLP      SCORELRN
+              ________      ________      ________      ________      ________
+ TSKNOTES       2.433
+ ELBMATCH       1.230         2.017
+ ELBEXP         0.646         0.721         1.290
+ SCOREHLP       0.620         0.747         0.664         1.559
+ SCORELRN       0.664         0.643         0.823         0.857         1.200
+ HLPFIG         0.147         0.039         0.147         0.319         0.126
+ HLPNHELP       0.185         0.380         0.215         0.312         0.302
+ HLPPEER        0.664         0.465         0.125         0.477         0.132
+ HLPCOLLG       0.647         0.512         0.148         0.484         0.069
+ HLPDIFF        0.390         0.496         0.212         0.297         0.105
+ PLATFORM      -0.064        -0.137        -0.145        -0.125        -0.225
+
+
+           Covariances
+              HLPFIG        HLPNHELP      HLPPEER       HLPCOLLG      HLPDIFF
+              ________      ________      ________      ________      ________
+ HLPFIG         2.233
+ HLPNHELP       0.203         1.923
+ HLPPEER        0.434         0.510         2.434
+ HLPCOLLG       0.348         0.538         1.980         2.619
+ HLPDIFF        0.492         0.367         1.156         1.430         2.104
+ PLATFORM       0.037        -0.092         0.060         0.117         0.054
+
+
+           Covariances
+              PLATFORM
+              ________
+ PLATFORM       0.211
+
+
+           Correlations
+              GOALPERS      GOALREAL      GOALHELP      STRADAPT      STRALT
+              ________      ________      ________      ________      ________
+ GOALPERS       1.000
+ GOALREAL       0.728         1.000
+ GOALHELP       0.681         0.801         1.000
+ STRADAPT       0.531         0.669         0.736         1.000
+ STRALT         0.360         0.434         0.402         0.450         1.000
+ STRASK         0.493         0.492         0.471         0.437         0.311
+ STRPLAN        0.444         0.482         0.456         0.408         0.378
+ TSKREL         0.442         0.513         0.479         0.395         0.371
+ TSKCHNGE       0.465         0.492         0.459         0.446         0.463
+ TSKDIFF        0.077         0.038         0.060         0.124         0.212
+ TSKNOTES       0.378         0.429         0.391         0.395         0.285
+ ELBMATCH       0.391         0.528         0.472         0.399         0.343
+ ELBEXP         0.378         0.446         0.516         0.539         0.354
+ SCOREHLP       0.436         0.480         0.492         0.469         0.273
+ SCORELRN       0.539         0.560         0.641         0.589         0.303
+ HLPFIG         0.010         0.062         0.064         0.106         0.123
+ HLPNHELP       0.151         0.192         0.210         0.224         0.221
+ HLPPEER        0.135         0.127         0.099         0.075         0.191
+ HLPCOLLG       0.046         0.060         0.025         0.035         0.144
+ HLPDIFF        0.114         0.123         0.108         0.135         0.265
+ PLATFORM      -0.390        -0.458        -0.589        -0.483        -0.197
+
+
+           Correlations
+              STRASK        STRPLAN       TSKREL        TSKCHNGE      TSKDIFF
+              ________      ________      ________      ________      ________
+ STRASK         1.000
+ STRPLAN        0.618         1.000
+ TSKREL         0.508         0.428         1.000
+ TSKCHNGE       0.443         0.460         0.641         1.000
+ TSKDIFF        0.038         0.188         0.111         0.217         1.000
+ TSKNOTES       0.426         0.555         0.379         0.377         0.145
+ ELBMATCH       0.392         0.571         0.463         0.430         0.127
+ ELBEXP         0.374         0.372         0.473         0.351         0.036
+ SCOREHLP       0.472         0.475         0.391         0.350         0.068
+ SCORELRN       0.478         0.369         0.469         0.423         0.004
+ HLPFIG         0.124         0.062         0.064         0.138         0.261
+ HLPNHELP       0.198         0.162         0.086         0.205         0.128
+ HLPPEER        0.219         0.319         0.071         0.139         0.254
+ HLPCOLLG       0.204         0.348         0.019         0.147         0.264
+ HLPDIFF        0.116         0.252         0.050         0.190         0.309
+ PLATFORM      -0.209        -0.146        -0.307        -0.325        -0.025
+
+
+           Correlations
+              TSKNOTES      ELBMATCH      ELBEXP        SCOREHLP      SCORELRN
+              ________      ________      ________      ________      ________
+ TSKNOTES       1.000
+ ELBMATCH       0.555         1.000
+ ELBEXP         0.365         0.447         1.000
+ SCOREHLP       0.318         0.421         0.469         1.000
+ SCORELRN       0.389         0.413         0.661         0.627         1.000
+ HLPFIG         0.063         0.018         0.087         0.171         0.077
+ HLPNHELP       0.085         0.193         0.137         0.180         0.199
+ HLPPEER        0.273         0.210         0.070         0.245         0.077
+ HLPCOLLG       0.256         0.223         0.080         0.239         0.039
+ HLPDIFF        0.173         0.241         0.129         0.164         0.066
+ PLATFORM      -0.089        -0.210        -0.279        -0.218        -0.447
+
+
+           Correlations
+              HLPFIG        HLPNHELP      HLPPEER       HLPCOLLG      HLPDIFF
+              ________      ________      ________      ________      ________
+ HLPFIG         1.000
+ HLPNHELP       0.098         1.000
+ HLPPEER        0.186         0.236         1.000
+ HLPCOLLG       0.144         0.240         0.784         1.000
+ HLPDIFF        0.227         0.183         0.511         0.609         1.000
+ PLATFORM       0.053        -0.144         0.084         0.157         0.081
+
+
+           Correlations
+              PLATFORM
+              ________
+ PLATFORM       1.000
+
+
+     MAXIMUM LOG-LIKELIHOOD VALUE FOR THE UNRESTRICTED (H1) MODEL IS -7848.762
+
+
+THE MODEL ESTIMATION TERMINATED NORMALLY
+
+
+
+MODEL FIT INFORMATION
+
+Number of Free Parameters                       62
+
+Loglikelihood
+
+          H0 Value                       -8509.109
+          H0 Scaling Correction Factor      1.1114
+            for MLR
+
+Information Criteria
+
+          Akaike (AIC)                   17142.219
+          Bayesian (BIC)                 17363.928
+          Sample-Size Adjusted BIC       17167.356
+            (n* = (n + 2) / 24)
+
+
+
+FINAL CLASS COUNTS AND PROPORTIONS FOR THE LATENT CLASSES
+BASED ON THE ESTIMATED MODEL
+
+    Latent
+   Classes
+
+       1         30.46787          0.11541
+       2        233.53213          0.88459
+
+
+FINAL CLASS COUNTS AND PROPORTIONS FOR THE LATENT CLASS PATTERNS
+BASED ON ESTIMATED POSTERIOR PROBABILITIES
+
+    Latent
+   Classes
+
+       1         30.46781          0.11541
+       2        233.53219          0.88459
+
+
+CLASSIFICATION QUALITY
+
+     Entropy                         0.990
+
+
+CLASSIFICATION OF INDIVIDUALS BASED ON THEIR MOST LIKELY LATENT CLASS MEMBERSHIP
+
+Class Counts and Proportions
+
+    Latent
+   Classes
+
+       1               31          0.11742
+       2              233          0.88258
+
+
+Average Latent Class Probabilities for Most Likely Latent Class Membership (Row)
+by Latent Class (Column)
+
+           1        2
+
+    1   0.980    0.020
+    2   0.000    1.000
+
+
+MODEL RESULTS
+
+                                                    Two-Tailed
+                    Estimate       S.E.  Est./S.E.    P-Value
+
+Latent Class 1
+
+ Means
+    GOALPERS           1.530      0.191      8.013      0.000
+    GOALREAL           1.464      0.176      8.340      0.000
+    GOALHELP           1.480      0.197      7.496      0.000
+    STRADAPT           1.555      0.336      4.633      0.000
+    STRALT             1.861      0.255      7.308      0.000
+    STRASK             1.361      0.207      6.576      0.000
+    STRPLAN            1.342      0.155      8.650      0.000
+    TSKREL             2.091      0.265      7.889      0.000
+    TSKCHNGE           1.696      0.257      6.602      0.000
+    TSKDIFF            1.930      0.240      8.031      0.000
+    TSKNOTES           1.372      0.178      7.718      0.000
+    ELBMATCH           2.021      0.269      7.511      0.000
+    ELBEXP             2.429      0.392      6.198      0.000
+    SCOREHLP           2.091      0.260      8.027      0.000
+    SCORELRN           2.198      0.383      5.736      0.000
+    HLPFIG             2.893      0.298      9.700      0.000
+    HLPNHELP           3.157      0.272     11.617      0.000
+    HLPPEER            2.150      0.272      7.915      0.000
+    HLPCOLLG           2.286      0.274      8.330      0.000
+    HLPDIFF            1.530      0.165      9.275      0.000
+
+ Variances
+    GOALPERS           1.036      0.129      8.059      0.000
+    GOALREAL           1.034      0.110      9.379      0.000
+    GOALHELP           0.784      0.102      7.705      0.000
+    STRADAPT           1.079      0.136      7.920      0.000
+    STRALT             1.816      0.116     15.631      0.000
+    STRASK             1.432      0.128     11.198      0.000
+    STRPLAN            1.747      0.126     13.848      0.000
+    TSKREL             1.078      0.137      7.878      0.000
+    TSKCHNGE           1.337      0.124     10.768      0.000
+    TSKDIFF            1.961      0.131     14.911      0.000
+    TSKNOTES           1.962      0.134     14.642      0.000
+    ELBMATCH           1.636      0.146     11.229      0.000
+    ELBEXP             0.861      0.126      6.823      0.000
+    SCOREHLP           1.102      0.125      8.836      0.000
+    SCORELRN           0.661      0.104      6.327      0.000
+    HLPFIG             2.226      0.111     20.115      0.000
+    HLPNHELP           1.894      0.124     15.251      0.000
+    HLPPEER            2.396      0.108     22.153      0.000
+    HLPCOLLG           2.589      0.102     25.444      0.000
+    HLPDIFF            2.039      0.126     16.210      0.000
+
+Latent Class 2
+
+ Means
+    GOALPERS           4.241      0.075     56.246      0.000
+    GOALREAL           4.095      0.076     53.845      0.000
+    GOALHELP           4.324      0.068     63.186      0.000
+    STRADAPT           4.113      0.069     59.675      0.000
+    STRALT             3.393      0.091     37.291      0.000
+    STRASK             3.916      0.084     46.753      0.000
+    STRPLAN            3.563      0.096     37.135      0.000
+    TSKREL             4.288      0.071     60.459      0.000
+    TSKCHNGE           3.834      0.079     48.297      0.000
+    TSKDIFF            2.309      0.094     24.671      0.000
+    TSKNOTES           3.521      0.100     35.306      0.000
+    ELBMATCH           3.950      0.088     44.660      0.000
+    ELBEXP             4.479      0.055     81.665      0.000
+    SCOREHLP           4.206      0.071     58.925      0.000
+    SCORELRN           4.496      0.048     92.763      0.000
+    HLPFIG             3.160      0.097     32.423      0.000
+    HLPNHELP           3.690      0.091     40.447      0.000
+    HLPPEER            2.760      0.107     25.756      0.000
+    HLPCOLLG           2.828      0.110     25.661      0.000
+    HLPDIFF            2.327      0.099     23.613      0.000
+
+ Variances
+    GOALPERS           1.036      0.129      8.059      0.000
+    GOALREAL           1.034      0.110      9.379      0.000
+    GOALHELP           0.784      0.102      7.705      0.000
+    STRADAPT           1.079      0.136      7.920      0.000
+    STRALT             1.816      0.116     15.631      0.000
+    STRASK             1.432      0.128     11.198      0.000
+    STRPLAN            1.747      0.126     13.848      0.000
+    TSKREL             1.078      0.137      7.878      0.000
+    TSKCHNGE           1.337      0.124     10.768      0.000
+    TSKDIFF            1.961      0.131     14.911      0.000
+    TSKNOTES           1.962      0.134     14.642      0.000
+    ELBMATCH           1.636      0.146     11.229      0.000
+    ELBEXP             0.861      0.126      6.823      0.000
+    SCOREHLP           1.102      0.125      8.836      0.000
+    SCORELRN           0.661      0.104      6.327      0.000
+    HLPFIG             2.226      0.111     20.115      0.000
+    HLPNHELP           1.894      0.124     15.251      0.000
+    HLPPEER            2.396      0.108     22.153      0.000
+    HLPCOLLG           2.589      0.102     25.444      0.000
+    HLPDIFF            2.039      0.126     16.210      0.000
+
+Categorical Latent Variables
+
+ SRL#1      ON
+    PLATFORM           2.396      0.565      4.237      0.000
+
+ Intercepts
+    SRL#1             -3.262      0.540     -6.045      0.000
+
+
+LOGISTIC REGRESSION ODDS RATIO RESULTS
+
+Categorical Latent Variables
+
+ SRL#1    ON
+    PLATFORM          10.976
+
+
+ALTERNATIVE PARAMETERIZATIONS FOR THE CATEGORICAL LATENT VARIABLE REGRESSION
+
+Parameterization using Reference Class 1
+
+ SRL#2    ON
+    PLATFORM          -2.396      0.565     -4.237      0.000
+
+ Intercepts
+    SRL#2              3.262      0.540      6.045      0.000
+
+
+QUALITY OF NUMERICAL RESULTS
+
+     Condition Number for the Information Matrix              0.224E-04
+       (ratio of smallest to largest eigenvalue)
+
+
+RESIDUAL OUTPUT
+
+
+     ESTIMATED MODEL AND RESIDUALS (OBSERVED - ESTIMATED) FOR CLASS 1
+
+
+           Model Estimated Means
+              GOALPERS      GOALREAL      GOALHELP      STRADAPT      STRALT
+              ________      ________      ________      ________      ________
+ 1              1.530         1.464         1.480         1.555         1.861
+
+
+           Model Estimated Means
+              STRASK        STRPLAN       TSKREL        TSKCHNGE      TSKDIFF
+              ________      ________      ________      ________      ________
+ 1              1.361         1.342         2.091         1.696         1.930
+
+
+           Model Estimated Means
+              TSKNOTES      ELBMATCH      ELBEXP        SCOREHLP      SCORELRN
+              ________      ________      ________      ________      ________
+ 1              1.372         2.021         2.429         2.091         2.198
+
+
+           Model Estimated Means
+              HLPFIG        HLPNHELP      HLPPEER       HLPCOLLG      HLPDIFF
+              ________      ________      ________      ________      ________
+ 1              2.893         3.157         2.150         2.286         1.530
+
+
+           Model Estimated Means
+              PLATFORM
+              ________
+ 1              0.777
+
+
+           Residuals for Means
+              GOALPERS      GOALREAL      GOALHELP      STRADAPT      STRALT
+              ________      ________      ________      ________      ________
+ 1              0.000         0.000         0.000         0.000         0.000
+
+
+           Residuals for Means
+              STRASK        STRPLAN       TSKREL        TSKCHNGE      TSKDIFF
+              ________      ________      ________      ________      ________
+ 1              0.000         0.000         0.000         0.000         0.000
+
+
+           Residuals for Means
+              TSKNOTES      ELBMATCH      ELBEXP        SCOREHLP      SCORELRN
+              ________      ________      ________      ________      ________
+ 1              0.000         0.000         0.000         0.000         0.000
+
+
+           Residuals for Means
+              HLPFIG        HLPNHELP      HLPPEER       HLPCOLLG      HLPDIFF
+              ________      ________      ________      ________      ________
+ 1              0.000         0.000         0.000         0.000         0.000
+
+
+           Residuals for Means
+              PLATFORM
+              ________
+ 1              0.000
+
+
+           Model Estimated Covariances
+              GOALPERS      GOALREAL      GOALHELP      STRADAPT      STRALT
+              ________      ________      ________      ________      ________
+ GOALPERS       1.036
+ GOALREAL       0.000         1.034
+ GOALHELP       0.000         0.000         0.784
+ STRADAPT       0.000         0.000         0.000         1.079
+ STRALT         0.000         0.000         0.000         0.000         1.816
+ STRASK         0.000         0.000         0.000         0.000         0.000
+ STRPLAN        0.000         0.000         0.000         0.000         0.000
+ TSKREL         0.000         0.000         0.000         0.000         0.000
+ TSKCHNGE       0.000         0.000         0.000         0.000         0.000
+ TSKDIFF        0.000         0.000         0.000         0.000         0.000
+ TSKNOTES       0.000         0.000         0.000         0.000         0.000
+ ELBMATCH       0.000         0.000         0.000         0.000         0.000
+ ELBEXP         0.000         0.000         0.000         0.000         0.000
+ SCOREHLP       0.000         0.000         0.000         0.000         0.000
+ SCORELRN       0.000         0.000         0.000         0.000         0.000
+ HLPFIG         0.000         0.000         0.000         0.000         0.000
+ HLPNHELP       0.000         0.000         0.000         0.000         0.000
+ HLPPEER        0.000         0.000         0.000         0.000         0.000
+ HLPCOLLG       0.000         0.000         0.000         0.000         0.000
+ HLPDIFF        0.000         0.000         0.000         0.000         0.000
+ PLATFORM       0.000         0.000         0.000         0.000         0.000
+
+
+           Model Estimated Covariances
+              STRASK        STRPLAN       TSKREL        TSKCHNGE      TSKDIFF
+              ________      ________      ________      ________      ________
+ STRASK         1.432
+ STRPLAN        0.000         1.747
+ TSKREL         0.000         0.000         1.078
+ TSKCHNGE       0.000         0.000         0.000         1.337
+ TSKDIFF        0.000         0.000         0.000         0.000         1.961
+ TSKNOTES       0.000         0.000         0.000         0.000         0.000
+ ELBMATCH       0.000         0.000         0.000         0.000         0.000
+ ELBEXP         0.000         0.000         0.000         0.000         0.000
+ SCOREHLP       0.000         0.000         0.000         0.000         0.000
+ SCORELRN       0.000         0.000         0.000         0.000         0.000
+ HLPFIG         0.000         0.000         0.000         0.000         0.000
+ HLPNHELP       0.000         0.000         0.000         0.000         0.000
+ HLPPEER        0.000         0.000         0.000         0.000         0.000
+ HLPCOLLG       0.000         0.000         0.000         0.000         0.000
+ HLPDIFF        0.000         0.000         0.000         0.000         0.000
+ PLATFORM       0.000         0.000         0.000         0.000         0.000
+
+
+           Model Estimated Covariances
+              TSKNOTES      ELBMATCH      ELBEXP        SCOREHLP      SCORELRN
+              ________      ________      ________      ________      ________
+ TSKNOTES       1.962
+ ELBMATCH       0.000         1.636
+ ELBEXP         0.000         0.000         0.861
+ SCOREHLP       0.000         0.000         0.000         1.102
+ SCORELRN       0.000         0.000         0.000         0.000         0.661
+ HLPFIG         0.000         0.000         0.000         0.000         0.000
+ HLPNHELP       0.000         0.000         0.000         0.000         0.000
+ HLPPEER        0.000         0.000         0.000         0.000         0.000
+ HLPCOLLG       0.000         0.000         0.000         0.000         0.000
+ HLPDIFF        0.000         0.000         0.000         0.000         0.000
+ PLATFORM       0.000         0.000         0.000         0.000         0.000
+
+
+           Model Estimated Covariances
+              HLPFIG        HLPNHELP      HLPPEER       HLPCOLLG      HLPDIFF
+              ________      ________      ________      ________      ________
+ HLPFIG         2.226
+ HLPNHELP       0.000         1.894
+ HLPPEER        0.000         0.000         2.396
+ HLPCOLLG       0.000         0.000         0.000         2.589
+ HLPDIFF        0.000         0.000         0.000         0.000         2.039
+ PLATFORM       0.000         0.000         0.000         0.000         0.000
+
+
+           Model Estimated Covariances
+              PLATFORM
+              ________
+ PLATFORM       0.173
+
+
+           Residuals for Covariances
+              GOALPERS      GOALREAL      GOALHELP      STRADAPT      STRALT
+              ________      ________      ________      ________      ________
+ GOALPERS      -0.346
+ GOALREAL       0.494        -0.542
+ GOALHELP       0.461         0.427        -0.018
+ STRADAPT       0.512         0.482         0.480        -0.235
+ STRALT         0.216         0.174         0.365         0.363        -0.393
+ STRASK         0.048         0.071        -0.034         0.255         0.073
+ STRPLAN        0.038         0.061        -0.126         0.181         0.329
+ TSKREL        -0.034         0.103         0.094         0.072         0.500
+ TSKCHNGE       0.042         0.121         0.118         0.126         0.576
+ TSKDIFF       -0.011         0.149        -0.013         0.017         0.107
+ TSKNOTES       0.022         0.080        -0.008         0.261         0.128
+ ELBMATCH      -0.066         0.132         0.123         0.138         0.743
+ ELBEXP         0.093         0.153         0.180         0.337         0.715
+ SCOREHLP       0.226         0.199         0.155         0.333         0.502
+ SCORELRN       0.246         0.193         0.417         0.494         0.715
+ HLPFIG         0.059         0.117        -0.210         0.144         0.086
+ HLPNHELP      -0.244        -0.168        -0.368        -0.163         0.193
+ HLPPEER       -0.048        -0.038        -0.287        -0.274        -0.199
+ HLPCOLLG      -0.054        -0.101        -0.352        -0.345        -0.234
+ HLPDIFF        0.149         0.019        -0.054         0.040         0.117
+ PLATFORM      -0.107        -0.088        -0.241        -0.182        -0.196
+
+
+           Residuals for Covariances
+              STRASK        STRPLAN       TSKREL        TSKCHNGE      TSKDIFF
+              ________      ________      ________      ________      ________
+ STRASK        -1.029
+ STRPLAN        0.272        -1.342
+ TSKREL         0.250         0.347         0.649
+ TSKCHNGE       0.228         0.318         1.236         0.042
+ TSKDIFF        0.180         0.227         1.010         0.819        -0.340
+ TSKNOTES       0.151         0.287         0.240         0.255         0.003
+ ELBMATCH       0.099         0.361         1.231         1.010         0.486
+ ELBEXP         0.314         0.433         1.208         0.948         0.402
+ SCOREHLP       0.024         0.250         0.479         0.317         0.124
+ SCORELRN       0.100         0.150         0.505         0.483         0.023
+ HLPFIG         0.116         0.344         0.343         0.038         0.349
+ HLPNHELP      -0.040         0.126         0.026         0.153         0.298
+ HLPPEER        0.114         0.134        -0.005         0.055         0.310
+ HLPCOLLG       0.082         0.099         0.056         0.169         0.316
+ HLPDIFF        0.086         0.191         0.123         0.266         0.133
+ PLATFORM      -0.004         0.009        -0.113        -0.069         0.107
+
+
+           Residuals for Covariances
+              TSKNOTES      ELBMATCH      ELBEXP        SCOREHLP      SCORELRN
+              ________      ________      ________      ________      ________
+ TSKNOTES      -1.225
+ ELBMATCH       0.692         0.293
+ ELBEXP         0.444         1.453         1.379
+ SCOREHLP       0.271         0.774         1.437         0.433
+ SCORELRN       0.167         0.768         1.548         1.426         1.097
+ HLPFIG         0.254         0.475         0.659         0.901         0.634
+ HLPNHELP       0.059         0.366         0.222         0.418         0.258
+ HLPPEER        0.033        -0.154        -0.064        -0.003        -0.192
+ HLPCOLLG      -0.017        -0.160         0.152         0.194        -0.009
+ HLPDIFF        0.232         0.217         0.473         0.587         0.465
+ PLATFORM      -0.050        -0.094        -0.145        -0.078        -0.227
+
+
+           Residuals for Covariances
+              HLPFIG        HLPNHELP      HLPPEER       HLPCOLLG      HLPDIFF
+              ________      ________      ________      ________      ________
+ HLPFIG         0.215
+ HLPNHELP       0.854         0.070
+ HLPPEER        0.486         0.281        -0.662
+ HLPCOLLG       0.558         0.452         1.710        -0.709
+ HLPDIFF        0.348         0.113         0.511         0.648        -1.190
+ PLATFORM       0.123         0.182         0.223         0.253         0.085
+
+
+           Residuals for Covariances
+              PLATFORM
+              ________
+ PLATFORM       0.000
+
+
+     ESTIMATED MODEL AND RESIDUALS (OBSERVED - ESTIMATED) FOR CLASS 2
+
+
+           Model Estimated Means
+              GOALPERS      GOALREAL      GOALHELP      STRADAPT      STRALT
+              ________      ________      ________      ________      ________
+ 1              4.241         4.095         4.324         4.113         3.393
+
+
+           Model Estimated Means
+              STRASK        STRPLAN       TSKREL        TSKCHNGE      TSKDIFF
+              ________      ________      ________      ________      ________
+ 1              3.916         3.563         4.288         3.834         2.309
+
+
+           Model Estimated Means
+              TSKNOTES      ELBMATCH      ELBEXP        SCOREHLP      SCORELRN
+              ________      ________      ________      ________      ________
+ 1              3.521         3.950         4.479         4.206         4.496
+
+
+           Model Estimated Means
+              HLPFIG        HLPNHELP      HLPPEER       HLPCOLLG      HLPDIFF
+              ________      ________      ________      ________      ________
+ 1              3.160         3.690         2.760         2.828         2.327
+
+
+           Model Estimated Means
+              PLATFORM
+              ________
+ 1              0.241
+
+
+           Residuals for Means
+              GOALPERS      GOALREAL      GOALHELP      STRADAPT      STRALT
+              ________      ________      ________      ________      ________
+ 1              0.000         0.000         0.000         0.000         0.000
+
+
+           Residuals for Means
+              STRASK        STRPLAN       TSKREL        TSKCHNGE      TSKDIFF
+              ________      ________      ________      ________      ________
+ 1              0.000         0.000         0.000         0.000         0.000
+
+
+           Residuals for Means
+              TSKNOTES      ELBMATCH      ELBEXP        SCOREHLP      SCORELRN
+              ________      ________      ________      ________      ________
+ 1              0.000         0.000         0.000         0.000         0.000
+
+
+           Residuals for Means
+              HLPFIG        HLPNHELP      HLPPEER       HLPCOLLG      HLPDIFF
+              ________      ________      ________      ________      ________
+ 1              0.000         0.000         0.000         0.000         0.000
+
+
+           Residuals for Means
+              PLATFORM
+              ________
+ 1              0.000
+
+
+           Model Estimated Covariances
+              GOALPERS      GOALREAL      GOALHELP      STRADAPT      STRALT
+              ________      ________      ________      ________      ________
+ GOALPERS       1.036
+ GOALREAL       0.000         1.034
+ GOALHELP       0.000         0.000         0.784
+ STRADAPT       0.000         0.000         0.000         1.079
+ STRALT         0.000         0.000         0.000         0.000         1.816
+ STRASK         0.000         0.000         0.000         0.000         0.000
+ STRPLAN        0.000         0.000         0.000         0.000         0.000
+ TSKREL         0.000         0.000         0.000         0.000         0.000
+ TSKCHNGE       0.000         0.000         0.000         0.000         0.000
+ TSKDIFF        0.000         0.000         0.000         0.000         0.000
+ TSKNOTES       0.000         0.000         0.000         0.000         0.000
+ ELBMATCH       0.000         0.000         0.000         0.000         0.000
+ ELBEXP         0.000         0.000         0.000         0.000         0.000
+ SCOREHLP       0.000         0.000         0.000         0.000         0.000
+ SCORELRN       0.000         0.000         0.000         0.000         0.000
+ HLPFIG         0.000         0.000         0.000         0.000         0.000
+ HLPNHELP       0.000         0.000         0.000         0.000         0.000
+ HLPPEER        0.000         0.000         0.000         0.000         0.000
+ HLPCOLLG       0.000         0.000         0.000         0.000         0.000
+ HLPDIFF        0.000         0.000         0.000         0.000         0.000
+ PLATFORM       0.000         0.000         0.000         0.000         0.000
+
+
+           Model Estimated Covariances
+              STRASK        STRPLAN       TSKREL        TSKCHNGE      TSKDIFF
+              ________      ________      ________      ________      ________
+ STRASK         1.432
+ STRPLAN        0.000         1.747
+ TSKREL         0.000         0.000         1.078
+ TSKCHNGE       0.000         0.000         0.000         1.337
+ TSKDIFF        0.000         0.000         0.000         0.000         1.961
+ TSKNOTES       0.000         0.000         0.000         0.000         0.000
+ ELBMATCH       0.000         0.000         0.000         0.000         0.000
+ ELBEXP         0.000         0.000         0.000         0.000         0.000
+ SCOREHLP       0.000         0.000         0.000         0.000         0.000
+ SCORELRN       0.000         0.000         0.000         0.000         0.000
+ HLPFIG         0.000         0.000         0.000         0.000         0.000
+ HLPNHELP       0.000         0.000         0.000         0.000         0.000
+ HLPPEER        0.000         0.000         0.000         0.000         0.000
+ HLPCOLLG       0.000         0.000         0.000         0.000         0.000
+ HLPDIFF        0.000         0.000         0.000         0.000         0.000
+ PLATFORM       0.000         0.000         0.000         0.000         0.000
+
+
+           Model Estimated Covariances
+              TSKNOTES      ELBMATCH      ELBEXP        SCOREHLP      SCORELRN
+              ________      ________      ________      ________      ________
+ TSKNOTES       1.962
+ ELBMATCH       0.000         1.636
+ ELBEXP         0.000         0.000         0.861
+ SCOREHLP       0.000         0.000         0.000         1.102
+ SCORELRN       0.000         0.000         0.000         0.000         0.661
+ HLPFIG         0.000         0.000         0.000         0.000         0.000
+ HLPNHELP       0.000         0.000         0.000         0.000         0.000
+ HLPPEER        0.000         0.000         0.000         0.000         0.000
+ HLPCOLLG       0.000         0.000         0.000         0.000         0.000
+ HLPDIFF        0.000         0.000         0.000         0.000         0.000
+ PLATFORM       0.000         0.000         0.000         0.000         0.000
+
+
+           Model Estimated Covariances
+              HLPFIG        HLPNHELP      HLPPEER       HLPCOLLG      HLPDIFF
+              ________      ________      ________      ________      ________
+ HLPFIG         2.226
+ HLPNHELP       0.000         1.894
+ HLPPEER        0.000         0.000         2.396
+ HLPCOLLG       0.000         0.000         0.000         2.589
+ HLPDIFF        0.000         0.000         0.000         0.000         2.039
+ PLATFORM       0.000         0.000         0.000         0.000         0.000
+
+
+           Model Estimated Covariances
+              PLATFORM
+              ________
+ PLATFORM       0.183
+
+
+           Residuals for Covariances
+              GOALPERS      GOALREAL      GOALHELP      STRADAPT      STRALT
+              ________      ________      ________      ________      ________
+ GOALPERS       0.045
+ GOALREAL       0.564         0.071
+ GOALHELP       0.356         0.596         0.002
+ STRADAPT       0.193         0.479         0.493         0.031
+ STRALT         0.272         0.441         0.277         0.465         0.051
+ STRASK         0.273         0.277         0.145         0.158         0.269
+ STRPLAN        0.306         0.396         0.269         0.236         0.483
+ TSKREL         0.155         0.278         0.128         0.081         0.300
+ TSKCHNGE       0.269         0.321         0.168         0.248         0.556
+ TSKDIFF        0.046        -0.055        -0.001         0.146         0.403
+ TSKNOTES       0.216         0.335         0.171         0.253         0.325
+ ELBMATCH       0.244         0.514         0.313         0.260         0.352
+ ELBEXP        -0.004         0.112         0.144         0.266         0.196
+ SCOREHLP       0.132         0.226         0.167         0.206         0.114
+ SCORELRN       0.141         0.192         0.198         0.221         0.039
+ HLPFIG        -0.068         0.041         0.077         0.139         0.240
+ HLPNHELP       0.182         0.256         0.291         0.327         0.378
+ HLPPEER        0.133         0.115         0.059         0.032         0.401
+ HLPCOLLG      -0.049        -0.005        -0.073        -0.030         0.313
+ HLPDIFF       -0.019         0.020        -0.031         0.052         0.467
+ PLATFORM      -0.089        -0.140        -0.181        -0.150        -0.026
+
+
+           Residuals for Covariances
+              STRASK        STRPLAN       TSKREL        TSKCHNGE      TSKDIFF
+              ________      ________      ________      ________      ________
+ STRASK         0.134
+ STRPLAN        0.828         0.175
+ TSKREL         0.362         0.301        -0.085
+ TSKCHNGE       0.315         0.457         0.516        -0.005
+ TSKDIFF       -0.047         0.321        -0.007         0.262         0.044
+ TSKNOTES       0.435         0.880         0.261         0.331         0.265
+ ELBMATCH       0.329         0.833         0.281         0.318         0.140
+ ELBEXP         0.049         0.135         0.084        -0.024        -0.078
+ SCOREHLP       0.337         0.432         0.092         0.100         0.027
+ SCORELRN       0.166         0.078         0.079         0.073        -0.096
+ HLPFIG         0.210         0.043         0.024         0.242         0.564
+ HLPNHELP       0.297         0.228         0.030         0.279         0.220
+ HLPPEER        0.366         0.671         0.004         0.173         0.561
+ HLPCOLLG       0.371         0.803        -0.101         0.206         0.614
+ HLPDIFF        0.030         0.392        -0.116         0.187         0.661
+ PLATFORM       0.001         0.023        -0.049        -0.086        -0.009
+
+
+           Residuals for Covariances
+              TSKNOTES      ELBMATCH      ELBEXP        SCOREHLP      SCORELRN
+              ________      ________      ________      ________      ________
+ TSKNOTES       0.160
+ ELBMATCH       0.822        -0.038
+ ELBEXP         0.164         0.169        -0.180
+ SCOREHLP       0.141         0.273         0.063        -0.057
+ SCORELRN       0.159         0.114         0.184         0.222        -0.143
+ HLPFIG         0.067        -0.077         0.017         0.178        -0.011
+ HLPNHELP       0.069         0.263         0.088         0.168         0.166
+ HLPPEER        0.596         0.410         0.005         0.391         0.013
+ HLPCOLLG       0.600         0.479         0.019         0.389        -0.064
+ HLPDIFF        0.214         0.355        -0.011         0.064        -0.154
+ PLATFORM       0.067        -0.023        -0.019         0.000        -0.083
+
+
+           Residuals for Covariances
+              HLPFIG        HLPNHELP      HLPPEER       HLPCOLLG      HLPDIFF
+              ________      ________      ________      ________      ________
+ HLPFIG        -0.028
+ HLPNHELP       0.102        -0.009
+ HLPPEER        0.408         0.502         0.086
+ HLPCOLLG       0.304         0.516         1.977         0.093
+ HLPDIFF        0.487         0.352         1.184         1.482         0.155
+ PLATFORM       0.042        -0.095         0.076         0.132         0.099
+
+
+           Residuals for Covariances
+              PLATFORM
+              ________
+ PLATFORM       0.000
+
+
+TECHNICAL 11 OUTPUT
+
+     Random Starts Specifications for the k-1 Class Analysis Model
+        Number of initial stage random starts                  20
+        Number of final stage optimizations                     4
+
+
+
+     VUONG-LO-MENDELL-RUBIN LIKELIHOOD RATIO TEST FOR 1 (H0) VERSUS 2 CLASSES
+
+          H0 Loglikelihood Value                        -9166.922
+          2 Times the Loglikelihood Difference           1315.625
+          Difference in the Number of Parameters               22
+          Mean                                            105.087
+          Standard Deviation                              319.248
+          P-Value                                          0.0035
+
+     LO-MENDELL-RUBIN ADJUSTED LRT TEST
+
+          Value                                          1304.987
+          P-Value                                          0.0036
+
+
+TECHNICAL 14 OUTPUT
+
+     Random Starts Specifications for the k-1 Class Analysis Model
+        Number of initial stage random starts                  20
+        Number of final stage optimizations                     4
+
+     Random Starts Specification for the k-1 Class Model for Generated Data
+        Number of initial stage random starts                   2
+        Number of final stage optimizations                     1
+     Random Starts Specification for the k Class Model for Generated Data
+        Number of initial stage random starts                4000
+        Number of final stage optimizations                    40
+     Number of bootstrap draws requested                       20
+
+
+     PARAMETRIC BOOTSTRAPPED LIKELIHOOD RATIO TEST FOR 1 (H0) VERSUS 2 CLASSES
+
+          H0 Loglikelihood Value                        -9166.922
+          2 Times the Loglikelihood Difference           1315.625
+          Difference in the Number of Parameters               22
+          Approximate P-Value                              0.0000
+          Successful Bootstrap Draws                           20
+
+
+PLOT INFORMATION
+
+The following plots are available:
+
+  Histograms of sample values
+  Histograms of estimated values
+  Scatterplots (sample values, estimated values)
+  Sample means
+  Estimated means
+  Sample and estimated means
+  Adjusted estimated means
+  Observed individual values
+  Estimated individual values
+  Estimated means and observed individual values
+  Estimated means and estimated individual values
+  Adjusted estimated means and observed individual values
+  Adjusted estimated means and estimated individual values
+  Mixture distributions
+  Estimated probabilities for a categorical latent variable as a
+    function of its covariates
+
+SAVEDATA INFORMATION
+
+
+  Save file
+    lpa_probs.txt
+
+  Order and format of variables
+
+    GOALPERS       F10.3
+    GOALREAL       F10.3
+    GOALHELP       F10.3
+    STRADAPT       F10.3
+    STRALT         F10.3
+    STRASK         F10.3
+    STRPLAN        F10.3
+    TSKREL         F10.3
+    TSKCHNGE       F10.3
+    TSKDIFF        F10.3
+    TSKNOTES       F10.3
+    ELBMATCH       F10.3
+    ELBEXP         F10.3
+    SCOREHLP       F10.3
+    SCORELRN       F10.3
+    HLPFIG         F10.3
+    HLPNHELP       F10.3
+    HLPPEER        F10.3
+    HLPCOLLG       F10.3
+    HLPDIFF        F10.3
+    PLATFORM       F10.3
+    CPROB1         F10.3
+    CPROB2         F10.3
+    SRL            F10.3
+
+  Save file format
+    24F10.3
+
+  Save file record length    10000
+
+
+DIAGRAM INFORMATION
+
+  Mplus diagrams are currently not available for Mixture analysis.
+  No diagram output was produced.
+
+
+     Beginning Time:  21:58:30
+        Ending Time:  22:48:35
+       Elapsed Time:  00:50:05
+
+
+
+MUTHEN & MUTHEN
+3463 Stoner Ave.
+Los Angeles, CA  90066
+
+Tel: (310) 391-9971
+Fax: (310) 391-8971
+Web: www.StatModel.com
+Support: Support@StatModel.com
+
+Copyright (c) 1998-2012 Muthen & Muthen

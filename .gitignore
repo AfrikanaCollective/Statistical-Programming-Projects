@@ -1,6 +1,7 @@
 # Data Files (need ethical approval)
 *.csv
 *.dat
+*.dta
 *.xlsx
 *.png
 *.h5
@@ -12,3 +13,6 @@ twitter.txt
 firebaseConfig.txt
 life-firebase-adminsdk.json
 Spark/checkpoint
+srl.txt
+cfa_srl.txt
+fort.16
