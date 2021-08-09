@@ -1,0 +1,1037 @@
+
+## CIN-N Morbidity & Mortality
+
+```{r echo=FALSE, warning=FALSE, message=FALSE, fig.pos='H', comment = NA}
+
+Dataset <- data.table(read_csv("analysis.csv",guess_max = 80000, col_types = cols()))
+Dataset[ , key := .I]
+setkey(Dataset,key)
+
+rows.full <- nrow(Dataset)
+cat(paste0("Number of all observations in the dataset: ", rows.full))
+
+```
+
+
+### CIN - Neonatal Hospitals
+```{r echo=FALSE, warning=FALSE, message=FALSE, comment = NA, fig.pos='H', fig.height=7, fig.width=7}
+
+Map.Dataset <- read_csv("./dfke.csv", guess_max = 5000, col_types = cols()) %>% 
+  as.data.table()
+
+Map.Dataset[`Facility name` == "Kiambu District Hospital", `CIN hospitals` := "Y"]
+
+Map.Dataset %<>%
+  filter(`CIN hospitals`=="Y") %>%
+  filter(!(`Facility name` %in% c("Karatina District Hospital",
+                                  #"Naivasha District Hospital",
+                                  #"Migori District Hospital",
+                                  "Igegania Sub-District Hospital"
+                                  #"Homa Bay County Teaching and Referral Hospital",
+                                  #"Kisumu District Hospital",
+                                  #"Ruaraka Uhai Neema Hospital"
+                                  ))) %>%
+  dplyr::rename(Hospital =`CIN hospitals`) %>%
+  mutate(Hospital="Hospital") %>%
+  sf::st_as_sf(coords = c("Long", "Lat"), crs = 4326)
+
+kenya <- rKenyaCensus::KenyaCounties_SHP %>% 
+  sf::st_as_sf() %>%
+  mutate(County = str_to_title(County)) %>% 
+  filter(County != "Kenya") %>%
+  mutate(Population = as.integer(as.character(Population)),
+         Population = ifelse(County=="Trans Nzoia",990341,Population),
+         Area = ifelse(County=="Trans Nzoia",2495, Area),
+         PD = ifelse(County=="Trans Nzoia",396.9, PD),
+         Population = ifelse(County=="Murang'a",1056640,Population),
+         Area = ifelse(County=="Murang'a",2524, Area),
+         PD = ifelse(County=="Murang'a",418.6, PD),
+         PD_log = log(PD))
+
+brewer_purple <- colorRampPalette(RColorBrewer::brewer.pal(9, 'Purples'))
+
+aplot <- ggplot() +
+  geom_sf(data= kenya, aes(fill = PD_log)) +
+  scale_fill_gradientn(colours = brewer_purple(47), name = "Population\nDensity\n(Log)", 
+                       breaks = as.integer, limits = c(0,9)) +
+  geom_point(data = Map.Dataset,
+    aes(geometry = geometry, colour=Hospital),
+    stat = "sf_coordinates",
+    alpha = 0.65,
+    size = 3.5
+  ) +
+  scale_color_manual(values=c("#FFFF00")) + 
+  ggspatial::annotation_scale(location = "bl", width_hint = 0.5, tick_height = 0.6, text_cex = 1.0) +
+  ggspatial::annotation_north_arrow(location = "tl", 
+                         which_north = "true", 
+                         pad_x = unit(0.2, "in"), 
+                         pad_y = unit(0.2, "in"), 
+                         height = unit(1.5, "cm"),
+                         width = unit(1.5, "cm"),
+                         style = ggspatial::north_arrow_fancy_orienteering) +
+  theme_minimal(base_family = "Corbel") +
+  theme(axis.text.x = element_blank(),
+        axis.text.y = element_blank(),
+        axis.title.x = element_blank(),
+        axis.title.y = element_blank(),
+        axis.ticks.x = element_blank(),
+        axis.ticks.y = element_blank(),
+        #legend.position = c(0.15, 0.15),
+        panel.background = element_rect(fill = "white"),
+        legend.title = element_text(size = 11),
+        legend.text = element_text(size = 9)) +
+  guides(color = guide_legend(override.aes = list(size = 3.5))) 
+
+print(aplot)
+
+
+```
+
+
+### Mortality Data
+
+1.    Karatina District Hospital and World Friends/Ruaraka Neema Hospital omitted
+2.    Admissions from 01 - January 2018
+
+```{r echo=FALSE, warning=FALSE, message=FALSE, fig.pos='H', comment = NA}
+Mortality.Data <- Dataset %>%
+  dplyr::filter(!(Hospital %in% c("Karatina District Hospital", "World Friends/Ruaraka Neema Hospital"))) %>%
+  dplyr::filter(!(Admission.DateTime < as.Date("2018-01-01", formart = "%Y-%m-%d"))) %>%
+  dplyr::select(
+    Hospital,
+    Outcome,
+  ) %>% 
+  tidyr::drop_na() %>%
+  dplyr::mutate(
+    Hospital = ifelse(Hospital == "Bondo DH", "Pumwani Maternity Hospital", Hospital),
+    Hospital = ifelse(Hospital == "Mama Lucy Kayole", "Mama Lucy Kibaki Hospital", Hospital),
+    Outcome = ifelse(Outcome != "Dead", "Alive", "Dead" ),
+    Died = ifelse(Outcome == "Dead", T, F)
+  ) %>%
+  dplyr::group_by(Hospital) %>%
+  dplyr::summarise(
+    d = n(),
+    n = sum(Died)
+  ) 
+
+Mortality.Data %>%
+  dplyr::rename(
+    c(Admissions = d, Deaths = n)
+  ) %>%
+  kable(booktabs = T,
+        caption = "Mortality rate across CIN-N Hospitals, Jan 2018 - July 2021") %>%
+  kable_styling(bootstrap_options = c("striped", "hover"), 
+                latex_options = c("HOLD_position", "repeat_header", "scale_down", "striped"),
+                full_width = F, position = "center")
+```
+
+### Funnel Plots
+> Mortality across all admissions
+
+```{r echo=FALSE, warning=FALSE, message=FALSE, comment = NA, fig.pos='H', fig.height = 7, fig.width = 7}
+
+my_plot<- FunnelPlotR::funnel_plot(numerator = Mortality.Data$n,
+                                   denominator = Mortality.Data$d, 
+                                   group = Mortality.Data$Hospital, 
+                                   data_type = "PR",
+                                   limit = 95,
+                                   label = NA,
+                                   title = paste0('Mortality Funnel plot for CIN-N data, Jan 2018 - July 2021 \n(N = ',sum(Mortality.Data$d),")"), 
+                                   Poisson_limits = FALSE, 
+                                   OD_adjust  = FALSE)
+
+my_plot$plot + labs(x = "Hospital Admissions", y= "Mortality") +
+  theme_minimal(base_family = "Corbel") +
+  scale_x_continuous(breaks = seq(0,15000,2000)) +
+  scale_y_continuous(labels = scales::percent, limits = c(0,.33), breaks = seq(0,.33,.05)) +
+  theme(legend.position = "bottom")
+
+```
+
+
+\newpage
+> Mortality by age
+
+```{r echo=FALSE, warning=FALSE, message=FALSE, comment = NA, fig.pos='H', fig.height = 7, fig.width = 7}
+
+Mortality.Data.Age <- Dataset %>%
+  dplyr::filter(!(Hospital %in% c("Karatina District Hospital", "World Friends/Ruaraka Neema Hospital"))) %>%
+  dplyr::filter(!(Admission.DateTime < as.Date("2018-01-01", formart = "%Y-%m-%d"))) %>%
+  dplyr::select(
+    Hospital,
+    Outcome,
+    Age,
+  ) %>% 
+  tidyr::drop_na() %>%
+  dplyr::mutate(
+    Hospital = ifelse(Hospital == "Bondo DH", "Pumwani Maternity Hospital", Hospital),
+    Hospital = ifelse(Hospital == "Mama Lucy Kayole", "Mama Lucy Kibaki Hospital", Hospital),
+    Outcome = ifelse(Outcome != "Dead", "Alive", "Dead" ),
+    Died = ifelse(Outcome == "Dead", T, F)
+  ) %>%
+  dplyr::group_by(Hospital, Age) %>%
+  dplyr::summarise(
+    d = n(),
+    n = sum(Died)
+  )
+
+Mortality.Data.24hours <- Mortality.Data.Age[Mortality.Data.Age$Age == "Age <= 24hrs",]
+plot_24hrs <- FunnelPlotR::funnel_plot(numerator = Mortality.Data.24hours$n,
+                                   denominator = Mortality.Data.24hours$d, 
+                                   group = Mortality.Data.24hours$Hospital, 
+                                   data_type = "PR",
+                                   limit = 95,
+                                   label = NA,
+                                   title = paste0('Patients aged 24 hours or less\n(N = ',sum(Mortality.Data.24hours$d),")"), 
+                                   Poisson_limits = FALSE, 
+                                   OD_adjust  = FALSE)
+
+funnel_plot_24hrs <- plot_24hrs$plot + labs(x = "Hospital Admissions", y= "Mortality") +
+  theme_minimal(base_family = "Corbel") +
+  scale_x_continuous(breaks = seq(0,15000,2000)) +
+  scale_y_continuous(labels = scales::percent, limits = c(0,.33), breaks = seq(0,.33,.05)) +
+  theme(legend.position = "bottom")
+
+
+Mortality.Data.6days <- Mortality.Data.Age[Mortality.Data.Age$Age == "Age >1 - 6 days",]
+plot_6days <- FunnelPlotR::funnel_plot(numerator = Mortality.Data.6days$n,
+                                   denominator = Mortality.Data.6days$d, 
+                                   group = Mortality.Data.6days$Hospital, 
+                                   data_type = "PR",
+                                   limit = 95,
+                                   label = NA,
+                                   title = paste0('Patients aged >1 - 6 days\n(N = ',sum(Mortality.Data.6days$d),")"), 
+                                   Poisson_limits = FALSE, 
+                                   OD_adjust  = FALSE)
+
+funnel_plot_6days <- plot_6days$plot + labs(x = "Hospital Admissions", y= "Mortality") +
+  theme_minimal(base_family = "Corbel") +
+  scale_x_continuous(breaks = seq(0,3000,500)) +
+  scale_y_continuous(labels = scales::percent, limits = c(0,.33), breaks = seq(0,.33,.05)) +
+  theme(legend.position = "bottom")
+
+
+Mortality.Data.28days <- Mortality.Data.Age[Mortality.Data.Age$Age == "Age 7 - 28 days",]
+plot_28days <- FunnelPlotR::funnel_plot(numerator = Mortality.Data.28days$n,
+                                   denominator = Mortality.Data.28days$d, 
+                                   group = Mortality.Data.28days$Hospital, 
+                                   data_type = "PR",
+                                   limit = 95,
+                                   label = NA,
+                                   title = paste0('Patients aged 7-28 days\n(N = ',sum(Mortality.Data.28days$d),")"), 
+                                   Poisson_limits = FALSE, 
+                                   OD_adjust  = FALSE)
+
+funnel_plot_28days <- plot_28days$plot + labs(x = "Hospital Admissions", y= "Mortality") +
+  theme_minimal(base_family = "Corbel") +
+  scale_x_continuous(breaks = seq(0,350,50)) +
+  scale_y_continuous(labels = scales::percent, limits = c(0,.33), breaks = seq(0,.33,.05)) +
+  theme(legend.position = "bottom")
+
+Mortality.Data.gt28days <- Mortality.Data.Age[Mortality.Data.Age$Age == "Age > 28 days",]
+plot_gt28days <- FunnelPlotR::funnel_plot(numerator = Mortality.Data.gt28days$n,
+                                   denominator = Mortality.Data.gt28days$d, 
+                                   group = Mortality.Data.gt28days$Hospital, 
+                                   data_type = "PR",
+                                   limit = 95,
+                                   label = NA,
+                                   title = paste0('Patients aged > 28 days\n(N = ',sum(Mortality.Data.gt28days$d),")"), 
+                                   Poisson_limits = FALSE, 
+                                   OD_adjust  = FALSE)
+
+funnel_plot_gt28days <- plot_gt28days$plot + labs(x = "Hospital Admissions", y= "Mortality") +
+  theme_minimal(base_family = "Corbel") +
+  scale_x_continuous(breaks = seq(0,50,10)) +
+  scale_y_continuous(labels = scales::percent, limits = c(0,.33), breaks = seq(0,.33,.05)) +
+  theme(legend.position = "bottom")
+
+ggpubr::ggarrange(funnel_plot_24hrs, 
+                  funnel_plot_6days, 
+                  funnel_plot_28days,
+                  funnel_plot_gt28days, 
+          labels = c("A", "B", "C", "D"),
+          common.legend = TRUE,
+          legend = "bottom",
+          ncol = 2, nrow = 2)
+
+
+```
+
+
+\newpage
+> Mortality by Birth Weight
+
+```{r echo=FALSE, warning=FALSE, message=FALSE, comment = NA, fig.pos='H', fig.height = 8, fig.width = 7}
+
+Mortality.Data.Weight <- Dataset %>%
+  dplyr::filter(!(Hospital %in% c("Karatina District Hospital", "World Friends/Ruaraka Neema Hospital"))) %>%
+  dplyr::filter(!(Admission.DateTime < as.Date("2018-01-01", formart = "%Y-%m-%d"))) %>%
+  dplyr::select(
+    Hospital,
+    Outcome,
+    Weight.Group,
+  ) %>% 
+  tidyr::drop_na() %>%
+  dplyr::mutate(
+    Hospital = ifelse(Hospital == "Bondo DH", "Pumwani Maternity Hospital", Hospital),
+    Hospital = ifelse(Hospital == "Mama Lucy Kayole", "Mama Lucy Kibaki Hospital", Hospital),
+    Outcome = ifelse(Outcome != "Dead", "Alive", "Dead" ),
+    Died = ifelse(Outcome == "Dead", T, F)
+  ) %>%
+  dplyr::group_by(Hospital, Weight.Group) %>%
+  dplyr::summarise(
+    d = n(),
+    n = sum(Died)
+  )
+
+Mortality.Data.ELBW <- Mortality.Data.Weight[Mortality.Data.Weight$Weight.Group == "1000 gms & Below (ELBW)",]
+plot_ELBW <- FunnelPlotR::funnel_plot(numerator = Mortality.Data.ELBW$n,
+                                   denominator = Mortality.Data.ELBW$d, 
+                                   group = Mortality.Data.ELBW$Hospital, 
+                                   data_type = "PR",
+                                   limit = 95,
+                                   label = NA,
+                                   title = paste0('Birth Weight: 1000 gms & Below\n(N = ',sum(Mortality.Data.ELBW$d),")"), 
+                                   Poisson_limits = FALSE, 
+                                   OD_adjust  = FALSE)
+
+funnel_plot_ELBW <- plot_ELBW$plot + labs(x = "Hospital Admissions", y= "Mortality") +
+  theme_minimal(base_family = "Corbel") +
+  scale_x_continuous(breaks = seq(0,250,50)) +
+  scale_y_continuous(labels = scales::percent, limits = c(0.5,1.2), breaks = seq(0.5,1,.1)) +
+  theme(legend.position = "bottom")
+
+
+Mortality.Data.VLBW <- Mortality.Data.Weight[Mortality.Data.Weight$Weight.Group == "1001 - 1499 gms (VLBW)" ,]
+plot_VLBW <- FunnelPlotR::funnel_plot(numerator = Mortality.Data.VLBW$n,
+                                   denominator = Mortality.Data.VLBW$d, 
+                                   group = Mortality.Data.VLBW$Hospital, 
+                                   data_type = "PR",
+                                   limit = 95,
+                                   label = NA,
+                                   title = paste0('Birth Weight: 1001 - 1499 gms\n(N = ',sum(Mortality.Data.VLBW$d),")"), 
+                                   Poisson_limits = FALSE, 
+                                   OD_adjust  = FALSE)
+
+funnel_plot_VLBW <- plot_VLBW$plot + labs(x = "Hospital Admissions", y= "Mortality") +
+  theme_minimal(base_family = "Corbel") +
+  scale_x_continuous(breaks = seq(0,650,100)) +
+  scale_y_continuous(labels = scales::percent, limits = c(0,.8), breaks = seq(0,.8,.2)) +
+  theme(legend.position = "bottom")
+
+
+Mortality.Data.LBW <- Mortality.Data.Weight[Mortality.Data.Weight$Weight.Group == "1500 - 2499 gms (LBW)",]
+plot_LBW <- FunnelPlotR::funnel_plot(numerator = Mortality.Data.LBW$n,
+                                   denominator = Mortality.Data.LBW$d, 
+                                   group = Mortality.Data.LBW$Hospital, 
+                                   data_type = "PR",
+                                   limit = 95,
+                                   label = NA,
+                                   title = paste0('Birth Weight: 1500 - 2499 gms\n(N = ',sum(Mortality.Data.LBW$d),")"), 
+                                   Poisson_limits = FALSE, 
+                                   OD_adjust  = FALSE)
+
+funnel_plot_LBW <- plot_LBW$plot + labs(x = "Hospital Admissions", y= "Mortality") +
+  theme_minimal(base_family = "Corbel") +
+  scale_x_continuous(breaks = seq(0,3500,500)) +
+  scale_y_continuous(labels = scales::percent, limits = c(0,.25), breaks = seq(0,.25,.05)) +
+  theme(legend.position = "bottom")
+
+Mortality.Data.NBW <- Mortality.Data.Weight[Mortality.Data.Weight$Weight.Group == "2500 - 4000 gms (NBW)",]
+plot_NBW <- FunnelPlotR::funnel_plot(numerator = Mortality.Data.NBW$n,
+                                   denominator = Mortality.Data.NBW$d, 
+                                   group = Mortality.Data.NBW$Hospital, 
+                                   data_type = "PR",
+                                   limit = 95,
+                                   label = NA,
+                                   title = paste0('Birth Weight: 2500 - 4000 gms\n(N = ',sum(Mortality.Data.NBW$d),")"), 
+                                   Poisson_limits = FALSE, 
+                                   OD_adjust  = FALSE)
+
+funnel_plot_NBW <- plot_NBW$plot + labs(x = "Hospital Admissions", y= "Mortality") +
+  theme_minimal(base_family = "Corbel") +
+  scale_x_continuous(breaks = seq(0,10000,1500)) +
+  scale_y_continuous(labels = scales::percent, limits = c(0,.3), breaks = seq(0,.3,.05)) +
+  theme(legend.position = "bottom")
+
+Mortality.Data.Macrosomia <- Mortality.Data.Weight[Mortality.Data.Weight$Weight.Group == "> 4000 gms (Macrosomia)",]
+plot_Macrosomia <- FunnelPlotR::funnel_plot(numerator = Mortality.Data.Macrosomia$n,
+                                   denominator = Mortality.Data.Macrosomia$d, 
+                                   group = Mortality.Data.Macrosomia$Hospital, 
+                                   data_type = "PR",
+                                   limit = 95,
+                                   label = NA,
+                                   title = paste0('Birth Weight: > 4000 gms\n(N = ',sum(Mortality.Data.Macrosomia$d),")"), 
+                                   Poisson_limits = FALSE, 
+                                   OD_adjust  = FALSE)
+
+funnel_plot_Macrosomia <- plot_Macrosomia$plot + labs(x = "Hospital Admissions", y= "Mortality") +
+  theme_minimal(base_family = "Corbel") +
+  scale_x_continuous(breaks = seq(0,750,100)) +
+  scale_y_continuous(labels = scales::percent, limits = c(0,.5), breaks = seq(0,.5,.1)) +
+  theme(legend.position = "bottom")
+
+legend <- ggpubr::as_ggplot(ggpubr::get_legend(funnel_plot_Macrosomia, 
+                                               position = "right"))
+
+ggpubr::ggarrange(funnel_plot_ELBW + theme(legend.position = "none"), 
+                  funnel_plot_VLBW + theme(legend.position = "none"), 
+                  funnel_plot_LBW + theme(legend.position = "none"),
+                  funnel_plot_NBW + theme(legend.position = "none"), 
+                  funnel_plot_Macrosomia + theme(legend.position = "none"),
+                  legend,
+          labels = c("A", "B", "C", "D", "E", "F"),
+          common.legend = TRUE,
+          legend = "none",
+          ncol = 2, nrow = 3)
+
+
+```
+
+### Top newborn admission diagnoses over time
+
+```{r echo=FALSE, warning=FALSE, message=FALSE, comment = NA, fig.pos='H', fig.height = 8, fig.width = 8}
+
+get_venn_stats <- function(dataset){
+  if (!"data.table" %in% class(dataset))
+    dataset <- data.table(dataset)
+  disease.list <- names(dataset)
+  #Singles
+  disease.only <- sapply(disease.list, function(x) {
+    dis.code <- paste0("dataset[, ", x, " == TRUE]")
+    othr.code <- disease.list[!disease.list %in% x]
+    othr.code <- paste0("dataset[, ", othr.code, " == FALSE]")
+    othr.code <-paste0(othr.code, collapse=" & ")
+    other.code <- paste0("(", othr.code, ")")
+    all.code <- paste0("table(", dis.code, " & ", othr.code, ")[\"TRUE\"]")
+    counts1 <- eval(parse(text=all.code))
+    counts1[is.na(counts1)] <- 0
+    return(counts1)
+  })
+  names(disease.only) <- NULL
+  #Pairs
+  disease.pair <- combn(disease.list, 2)
+  disease.pair <- apply(disease.pair, 2, function(x) {
+    dis.code <- paste0("dataset[, ", x, " == TRUE]")
+    dis.code <-paste0(dis.code, collapse=" & ")
+    dis.code <- paste0("(", dis.code, ")")
+    othr.code <- disease.list[!disease.list %in% x]
+    othr.code <- paste0("dataset[, ", othr.code, " == FALSE]")
+    othr.code <-paste0(othr.code, collapse=" & ")
+    other.code <- paste0("(", othr.code, ")")
+    all.code <- paste0("table(", dis.code, " & ", othr.code, ")[\"TRUE\"]")
+    counts2 <- eval(parse(text=all.code))
+    counts2[is.na(counts2)] <- 0
+    return(counts2)
+  })
+  names(disease.pair) <- NULL
+  #Trios
+  disease.trio <- combn(disease.list, 3)
+  disease.trio <- apply(disease.trio, 2, function(x) {
+    dis.code <- paste0("dataset[, ", x, " == TRUE]")
+    dis.code <-paste0(dis.code, collapse=" & ")
+    dis.code <- paste0("(", dis.code, ")")
+    othr.code <- disease.list[!disease.list %in% x]
+    othr.code <- paste0("dataset[, ", othr.code, " == FALSE]")
+    othr.code <-paste0(othr.code, collapse=" & ")
+    other.code <- paste0("(", othr.code, ")")
+    all.code <- paste0("table(", dis.code, " & ", othr.code, ")[\"TRUE\"]")
+    counts3 <- eval(parse(text=all.code))
+    counts3[is.na(counts3)] <- 0
+    return(counts3)
+  })
+  names(disease.trio) <- NULL
+  disease.all <- paste0("(dataset[, ", disease.list, " == TRUE])")
+  disease.all <- paste(disease.all, collapse = " & ")
+  disease.all <- table(eval(parse(text=disease.all)))["TRUE"]
+  if (is.na(disease.all))
+    disease.all <- 0
+  names(disease.all)<-NULL
+  ret.val <- c(disease.only, disease.pair, disease.trio, disease.all)
+  return(ret.val)
+}
+
+#Dummy to return binary matrix depicting 4X4 combinations
+get.venn.mat <- function() {
+  return(
+    matrix(c(
+      0 ,0 ,0 ,0,
+      1 ,0 ,0 ,0, 
+      0 ,1 ,0 ,0,
+      0 ,0 ,1 ,0,
+      0 ,0 ,0 ,1,
+      1 ,1 ,0 ,0,
+      1, 0, 1, 0,
+      1, 0, 0, 1,
+      0, 1, 1, 0,
+      0, 1, 0, 1,
+      0, 0, 1, 1,
+      1, 1, 1, 0,
+      1, 1, 0, 1,
+      1, 0, 1, 1,
+      0, 1, 1, 1,
+      1, 1, 1, 1
+    )
+    ,nc = 4
+    ,byrow = TRUE)
+  )
+}
+
+plot.venn <- function (object, include = "both", names = NULL, mar = rep(1, 4), 
+                       cex = c(1.20, 1.025, 0.85), lwd = 1, circle.col = NULL, counts.col = NULL, 
+                       show.include = NULL, ...) {
+  include <- as.character(include)
+  LenInc <- min(length(include), 2)
+  if (is(object, "VennCounts")) {
+    include <- include[1]
+    LenInc <- 1
+  }
+  else {
+    if (LenInc > 1) 
+      z2 <- vennCounts(object, include = include[2])[, 
+                                                     "Counts"]
+    object <- vennCounts(object, include = include[1])
+  }
+  z <- object[, "Counts"]
+  nsets <- ncol(object) - 1
+  if (nsets > 5) 
+    stop("Can't plot Venn diagram for more than 5 sets")
+  VennZone <- object[, 1:nsets, drop = FALSE]
+  VennZone <- apply(VennZone, 1, function(x) paste(x, sep = "", 
+                                                   collapse = ""))
+  names(z) <- VennZone
+  if (length(include) == 2) 
+    names(z2) <- VennZone
+  if (is.null(names)) 
+    names <- colnames(object)[1:nsets]
+  if (is.null(circle.col)) 
+    circle.col <- par("col")
+  if (length(circle.col) < nsets) 
+    circle.col <- rep(circle.col, length.out = nsets)
+  if (is.null(counts.col)) 
+    counts.col <- par("col")
+  if (length(counts.col) < LenInc) 
+    counts.col <- rep(counts.col, length.out = LenInc)
+  if (is.null(show.include)) 
+    show.include <- as.logical(LenInc - 1)
+  old.par <- par()$mar
+  on.exit(par(mar = old.par))
+  par(mar = mar)
+  if (nsets <= 3) {
+    plot(x = 0, y = 0, type = "n", xlim = c(-4, 4), ylim = c(-4, 
+                                                             4), xlab = "", ylab = "", axes = FALSE, ...)
+    theta <- 2 * pi * (0:360)/360
+    xcentres <- switch(nsets, 0, c(-1, 1), c(-1, 1, 0))
+    ycentres <- switch(nsets, 0, c(0, 0), c(1, 1, -2)/sqrt(3))
+    r <- 1.5
+    xtext <- switch(nsets, -1.2, c(-1.2, 1.2), c(-1.2, 1.2, 
+                                                 0))
+    ytext <- switch(nsets, 1.8, c(1.8, 1.8), c(2.4, 2.4, 
+                                               -3))
+    for (circle in 1:nsets) {
+      lines(xcentres[circle] + r * cos(theta), ycentres[circle] + 
+              r * sin(theta), lwd = lwd, col = circle.col[circle])
+      text(xtext[circle], ytext[circle], names[circle], 
+           cex = cex,col=circle.col[circle], family="Corbel")
+    }
+    switch(nsets, rect(-3, -2.5, 3, 2.5), rect(-3, -2.5, 
+                                               3, 2.5), rect(-3, -3.5, 3, 3.3))
+    showCounts <- switch(nsets, function(counts, cex, adj, 
+                                         col, leg) {
+      text(2.3, -2.1, counts[1], cex = cex[2], col = col, 
+           adj = adj, family="Corbel")
+      text(0, 0, counts[2], cex = cex[2], col = col, adj = adj, family="Corbel")
+      if (show.include) text(-2.3, -2.1, leg, cex = cex, 
+                             col = col, adj = adj, family="Corbel")
+    }, function(counts, cex, adj, col, leg) {
+      text(2.3, -2.1, counts[1], cex = cex[2], col = col, 
+           adj = adj, family="Corbel")
+      text(1.5, 0.1, counts[2], cex = cex[2], col = col, adj = adj, family="Corbel")
+      text(-1.5, 0.1, counts[3], cex = cex[2], col = col, 
+           adj = adj, family="Corbel")
+      text(0, 0.1, counts[4], cex = cex[2], col = col, adj = adj, family="Corbel")
+      if (show.include) text(-2.3, -2.1, leg, cex = cex, 
+                             col = col, adj = adj, family="Corbel")
+    }, function(counts, cex, adj, col, leg) {
+      text(2.5, -3, counts[1], cex = cex[2], col = col, adj = adj, family="Corbel")
+      text(0, -1.7, counts[2], cex = cex[2], col = col, adj = adj, family="Corbel")
+      text(1.5, 1, counts[3], cex = cex[2], col = col, adj = adj, family="Corbel")
+      text(0.75, -0.35, counts[4], cex = cex[2], col = col, 
+           adj = adj, family="Corbel")
+      text(-1.5, 1, counts[5], cex = cex[2], col = col, adj = adj, family="Corbel")
+      text(-0.75, -0.35, counts[6], cex = cex[2], col = col, 
+           adj = adj, family="Corbel")
+      text(0, 0.9, counts[7], cex = cex[2], col = col, adj = adj, family="Corbel")
+      text(0, 0, counts[8], cex = cex[2], col = col, adj = adj, family="Corbel")
+      if (show.include) text(-2.5, -3, leg, cex = cex, 
+                             col = col, adj = adj, family="Corbel")
+    })
+    if (LenInc == 1) 
+      adj <- c(0.5, 0.5)
+    else adj <- c(0.5, 0)
+    showCounts(counts = z, cex = cex[1], adj = adj, col = counts.col[1], 
+               leg = include[1])
+    if (LenInc == 2) 
+      showCounts(counts = z2, cex = cex[1], adj = c(0.5, 
+                                                    1), col = counts.col[2], leg = include[2])
+    return(invisible())
+  }
+  plot(c(-20, 420), c(-20, 420), type = "n", axes = FALSE, 
+       ylab = "", xlab = "", ...)
+  relocate_elp <- function(e, alpha, x, y) {
+    phi <- (alpha/180) * pi
+    xr <- e[, 1] * cos(phi) + e[, 2] * sin(phi)
+    yr <- -e[, 1] * sin(phi) + e[, 2] * cos(phi)
+    xr <- x + xr
+    yr <- y + yr
+    cbind(xr, yr)
+  }
+  if (4 == nsets) {
+    rect(-20, -20, 420, 400)
+    elps <- cbind(162 * cos(seq(0, 2 * pi, len = 1000)), 
+                  108 * sin(seq(0, 2 * pi, len = 1000)))
+    polygon(relocate_elp(elps, 45, 130, 170), border = circle.col[1], 
+            lwd = lwd)
+    polygon(relocate_elp(elps, 45, 200, 200), border = circle.col[2], 
+            lwd = lwd)
+    polygon(relocate_elp(elps, 135, 200, 200), border = circle.col[3], 
+            lwd = lwd)
+    polygon(relocate_elp(elps, 135, 270, 170), border = circle.col[4], 
+            lwd = lwd)
+    text(35, 315, names[1], cex = cex[1], col=circle.col[1], family="Corbel")
+    text(138, 350, names[2], cex = cex[1], col=circle.col[2], family="Corbel")
+    text(262, 347, names[3], cex = cex[1], col=circle.col[3], family="Corbel")
+    text(365, 315, names[4], cex = cex[1], col=circle.col[4], family="Corbel")
+    text(35, 250, z["1000"], cex = cex[2], col = counts.col[1], family="Corbel")
+    text(140, 315, z["0100"], cex = cex[2], col = counts.col[1], family="Corbel")
+    text(260, 315, z["0010"], cex = cex[2], col = counts.col[1], family="Corbel")
+    text(365, 250, z["0001"], cex = cex[2], col = counts.col[1], family="Corbel")
+    text(90, 282, z["1100"], cex = cex[2], col = counts.col[1], family="Corbel")
+    text(95, 110, z["1010"], cex = cex[2], col = counts.col[1], family="Corbel")
+    text(200, 52, z["1001"], cex = cex[2], col = counts.col[1], family="Corbel")
+    text(200, 292, z["0110"], cex = cex[2], col = counts.col[1], family="Corbel")
+    text(300, 110, z["0101"], cex = cex[2], col = counts.col[1], family="Corbel")
+    text(310, 282, z["0011"], cex = cex[2], col = counts.col[1], family="Corbel")
+    text(130, 230, z["1110"], cex = cex[2], col = counts.col[1], family="Corbel")
+    text(245, 81, z["1101"], cex = cex[2], col = counts.col[1], family="Corbel")
+    text(155, 81, z["1011"], cex = cex[2], col = counts.col[1], family="Corbel")
+    text(270, 230, z["0111"], cex = cex[2], col = counts.col[1], family="Corbel")
+    text(200, 152, z["1111"], cex = cex[2], col = counts.col[1], family="Corbel")
+    text(350, 15, z["0000"], cex = cex[2], col = counts.col[1], family="Corbel")
+    if (length(include) == 2) {
+      text(35, 238, z2["1000"], cex = cex[2], col = counts.col[2], family="Corbel")
+      text(140, 304, z2["0100"], cex = cex[2], col = counts.col[2], family="Corbel")
+      text(260, 304, z2["0010"], cex = cex[2], col = counts.col[2], family="Corbel")
+      text(365, 238, z2["0001"], cex = cex[2], col = counts.col[2], family="Corbel")
+      text(90, 274, z2["1100"], cex = cex[3], col = counts.col[2], family="Corbel")
+      text(95, 100, z2["1010"], cex = cex[2], col = counts.col[2], family="Corbel")
+      text(200, 43, z2["1001"], cex = cex[3], col = counts.col[2], family="Corbel")
+      text(200, 280, z2["0110"], cex = cex[2], col = counts.col[2], family="Corbel")
+      text(300, 100, z2["0101"], cex = cex[2], col = counts.col[2], family="Corbel")
+      text(310, 274, z2["0011"], cex = cex[3], col = counts.col[2], family="Corbel")
+      text(130, 219, z2["1110"], cex = cex[2], col = counts.col[2], family="Corbel")
+      text(245, 71, z2["1101"], cex = cex[3], col = counts.col[2], family="Corbel")
+      text(155, 72, z2["1011"], cex = cex[3], col = counts.col[2], family="Corbel")
+      text(270, 219, z2["0111"], cex = cex[2], col = counts.col[2], family="Corbel")
+      text(200, 140, z2["1111"], cex = cex[2], col = counts.col[2], family="Corbel")
+      text(350, -2, z2["0000"], cex = cex[2], col = counts.col[2], family="Corbel")
+      if (show.include) {
+        text(10, 15, include[1], cex = cex[2], col = counts.col[1], family="Corbel")
+        text(10, -2, include[2], cex = cex[2], col = counts.col[2], family="Corbel")
+      }
+    }
+    return(invisible())
+  }
+  rect(-20, -30, 430, 430)
+  elps <- cbind(150 * cos(seq(0, 2 * pi, len = 1000)), 60 * 
+                  sin(seq(0, 2 * pi, len = 1000)))
+  polygon(relocate_elp(elps, 90, 200, 250), border = circle.col[1], 
+          lwd = lwd)
+  polygon(relocate_elp(elps, 162, 250, 220), border = circle.col[2], 
+          lwd = lwd)
+  polygon(relocate_elp(elps, 234, 250, 150), border = circle.col[3], 
+          lwd = lwd)
+  polygon(relocate_elp(elps, 306, 180, 125), border = circle.col[4], 
+          lwd = lwd)
+  polygon(relocate_elp(elps, 378, 145, 200), border = circle.col[5], 
+          lwd = lwd)
+  text(50, 285, names[1], cex = cex[1], col=circle.col[1], family="Corbel")
+  text(200, 415, names[2], cex = cex[1], col=circle.col[2], family="Corbel")
+  text(350, 305, names[3], cex = cex[1], col=circle.col[3], family="Corbel")
+  text(350, 20, names[4], cex = cex[1], col=circle.col[4], family="Corbel")
+  text(100, -10, names[5], cex = cex[1], col=circle.col[5], family="Corbel")
+  text(61, 231, z["10000"], cex = cex[2], col = counts.col[1], family="Corbel")
+  text(194, 332, z["01000"], cex = cex[2], col = counts.col[1], family="Corbel")
+  text(321, 248, z["00100"], cex = cex[2], col = counts.col[1], family="Corbel")
+  text(290, 84, z["00010"], cex = cex[2], col = counts.col[1], family="Corbel")
+  text(132, 72, z["00001"], cex = cex[2], col = counts.col[1], family="Corbel")
+  text(146, 253, z["11000"], cex = cex[3], col = counts.col[1], family="Corbel")
+  text(123, 191, z["10100"], cex = cex[3], col = counts.col[1], family="Corbel")
+  text(275, 155, z["10010"], cex = cex[3], col = counts.col[1], family="Corbel")
+  text(137, 149, z["10001"], cex = cex[3], col = counts.col[1], family="Corbel")
+  text(243, 271, z["01100"], cex = cex[3], col = counts.col[1], family="Corbel")
+  text(175, 270, z["01010"], cex = cex[3], col = counts.col[1], family="Corbel")
+  text(187, 120, z["01001"], cex = cex[3], col = counts.col[1], family="Corbel")
+  text(286, 193, z["00110"], cex = cex[3], col = counts.col[1], family="Corbel")
+  text(267, 238, z["00101"], cex = cex[3], col = counts.col[1], family="Corbel")
+  text(228, 108, z["00011"], cex = cex[3], col = counts.col[1], family="Corbel")
+  text(148, 213, z["11100"], cex = cex[3], col = counts.col[1], family="Corbel")
+  text(159, 255, z["11010"], cex = cex[3], col = counts.col[1], family="Corbel")
+  text(171, 144, z["11001"], cex = cex[3], col = counts.col[1], family="Corbel")
+  text(281, 178, z["10110"], cex = cex[3], col = counts.col[1], family="Corbel")
+  text(143, 166, z["10101"], cex = cex[3], col = counts.col[1], family="Corbel")
+  text(252, 148, z["10011"], cex = cex[3], col = counts.col[1], family="Corbel")
+  text(205, 258, z["01110"], cex = cex[3], col = counts.col[1], family="Corbel")
+  text(254, 248, z["01101"], cex = cex[3], col = counts.col[1], family="Corbel")
+  text(211, 121, z["01011"], cex = cex[3], col = counts.col[1], family="Corbel")
+  text(267, 214, z["00111"], cex = cex[3], col = counts.col[1], family="Corbel")
+  text(170, 234, z["11110"], cex = cex[3], col = counts.col[1], family="Corbel")
+  text(158, 172, z["11101"], cex = cex[3], col = counts.col[1], family="Corbel")
+  text(212, 142, z["11011"], cex = cex[3], col = counts.col[1], family="Corbel")
+  text(263, 183, z["10111"], cex = cex[3], col = counts.col[1], family="Corbel")
+  text(239, 235, z["01111"], cex = cex[3], col = counts.col[1], family="Corbel")
+  text(204, 193, z["11111"], cex = cex[2], col = counts.col[1], family="Corbel")
+  text(350, 7, z["00000"], cex = cex[1], col = counts.col[1], family="Corbel")
+  if (length(include) == 2) {
+    text(61, 220, z2["10000"], cex = cex[2], col = counts.col[2], family="Corbel")
+    text(194, 321, z2["01000"], cex = cex[2], col = counts.col[2], family="Corbel")
+    text(321, 237, z2["00100"], cex = cex[2], col = counts.col[2], family="Corbel")
+    text(290, 73, z2["00010"], cex = cex[2], col = counts.col[2], family="Corbel")
+    text(132, 61, z2["00001"], cex = cex[2], col = counts.col[2], family="Corbel")
+    text(146, 244, z2["11000"], cex = cex[3], col = counts.col[2], family="Corbel")
+    text(123, 180, z2["10100"], cex = cex[3], col = counts.col[2], family="Corbel")
+    text(275, 144, z2["10010"], cex = cex[3], col = counts.col[2], family="Corbel")
+    text(137, 143, z2["10001"], cex = cex[3], col = counts.col[2], family="Corbel")
+    text(243, 260, z2["01100"], cex = cex[3], col = counts.col[2], family="Corbel")
+    text(175, 259, z2["01010"], cex = cex[3], col = counts.col[2], family="Corbel")
+    text(187, 110, z2["01001"], cex = cex[3], col = counts.col[2], family="Corbel")
+    text(286, 186, z2["00110"], cex = cex[3], col = counts.col[2], family="Corbel")
+    text(267, 230, z2["00101"], cex = cex[3], col = counts.col[2], family="Corbel")
+    text(228, 97, z2["00011"], cex = cex[3], col = counts.col[2], family="Corbel")
+    text(148, 203, z2["11100"], cex = cex[3], col = counts.col[2], family="Corbel")
+    text(159, 249, z2["11010"], cex = cex[3], col = counts.col[2], family="Corbel")
+    text(171, 137, z2["11001"], cex = cex[3], col = counts.col[2], family="Corbel")
+    text(281, 171, z2["10110"], cex = cex[3], col = counts.col[2], family="Corbel")
+    text(143, 155, z2["10101"], cex = cex[3], col = counts.col[2], family="Corbel")
+    text(252, 137, z2["10011"], cex = cex[3], col = counts.col[2], family="Corbel")
+    text(205, 247, z2["01110"], cex = cex[3], col = counts.col[2], family="Corbel")
+    text(254, 242, z2["01101"], cex = cex[3], col = counts.col[2], family="Corbel")
+    text(211, 112, z2["01011"], cex = cex[3], col = counts.col[2], family="Corbel")
+    text(267, 207, z2["00111"], cex = cex[3], col = counts.col[2], family="Corbel")
+    text(170, 223, z2["11110"], cex = cex[3], col = counts.col[2], family="Corbel")
+    text(158, 162, z2["11101"], cex = cex[3], col = counts.col[2], family="Corbel")
+    text(212, 133, z2["11011"], cex = cex[3], col = counts.col[2], family="Corbel")
+    text(263, 172, z2["10111"], cex = cex[3], col = counts.col[2], family="Corbel")
+    text(239, 228, z2["01111"], cex = cex[3], col = counts.col[2], family="Corbel")
+    text(204, 182, z2["11111"], cex = cex[2], col = counts.col[2], family="Corbel")
+    text(350, -10, z2["00000"], cex = cex[1], col = counts.col[2], family="Corbel")
+    if (show.include) {
+      text(10, 7, include[1], cex = cex[1], col = counts.col[1], family="Corbel")
+      text(10, -10, include[2], cex = cex[1], col = counts.col[2], family="Corbel")
+    }
+  }
+  invisible()
+}
+
+get_summary_stats <- function(column_data){
+  n = sum(column_data)
+  return(n)
+}
+
+tabular_data <- Dataset %>%
+  dplyr::filter(!(Admission.DateTime < as.Date("2018-01-01", formart = "%Y-%m-%d"))) %>%
+  dplyr::filter(Admission_Date < Sys.Date()) %>%
+  dplyr::select(tidyr::contains("Admit.")) %>%
+  dplyr::select(-`Admit.Diagnose.No Diagnosis`) %>%
+  data.table::as.data.table() 
+
+summary_stats = as.data.frame(t(tabular_data[,lapply(.SD,get_summary_stats)]))
+summary_stats <- setDT(summary_stats, keep.rownames = TRUE)[]
+names(summary_stats) <- c("Diagnoses","Counts")
+summary_stats <- as.data.table(summary_stats)
+summary_stats %<>% dplyr::filter(Diagnoses != "Admit.Diagnose.Other") %>%
+    dplyr::mutate(
+      Diagnoses = gsub("Admit.Diagnose.","",Diagnoses),
+      Diagnoses = gsub(" ",".",Diagnoses),
+    )
+
+top_four_diagnoses <- head(summary_stats[order(-Counts)],n=4)
+
+names(tabular_data) <- gsub("Admit.Diagnose.","", names(tabular_data))
+names(tabular_data) <- gsub(" ",".", names(tabular_data))
+
+venn_diagnoses <- tabular_data[,copy(.SD),.SDcols=top_four_diagnoses$Diagnoses]
+computed_venn_data <- get_venn_stats(venn_diagnoses)
+denom <- venn_diagnoses[, .N]
+othr.episodes <- denom - sum(computed_venn_data)
+episodes <- round(c(othr.episodes, computed_venn_data), 0)
+episodes.p <- round(episodes*100/denom, 2)
+episodes <- paste0(episodes, "\n(", episodes.p, "%)")
+episodes[1] <-paste0("Not in top 4*\n", gsub("\n"," ",episodes[1]))
+venn.mat <- cbind(get.venn.mat(),episodes)
+colnames(venn.mat) <-gsub(".", "\n", c(paste0(top_four_diagnoses$Diagnoses,"\n\n"),"Counts"), fixed = T)
+class(venn.mat)<-"VennCounts"
+
+plot.venn(object = venn.mat,circle.col = c("red", "blue", "purple", "black"))
+
+```
+
+\newpage
+
+### Top newborn discharge diagnoses over time
+
+```{r echo=FALSE, warning=FALSE, message=FALSE, comment = NA, fig.pos='H', fig.height = 8, fig.width = 8}
+
+tabular_data <- Dataset %>%
+  dplyr::filter(!(Admission.DateTime < as.Date("2018-01-01", formart = "%Y-%m-%d"))) %>%
+  dplyr::filter(Admission_Date < Sys.Date()) %>%
+  dplyr::select(tidyr::contains("Discharge.Diagnose.")) %>%
+  dplyr::select(-`Discharge.Diagnose.No Diagnosis`) %>%
+  data.table::as.data.table() 
+
+summary_stats = as.data.frame(t(tabular_data[,lapply(.SD,get_summary_stats)]))
+summary_stats <- setDT(summary_stats, keep.rownames = TRUE)[]
+names(summary_stats) <- c("Diagnoses","Counts")
+summary_stats <- as.data.table(summary_stats)
+summary_stats %<>% dplyr::filter(Diagnoses != "Discharge.Diagnose.Other") %>%
+    dplyr::mutate(
+      Diagnoses = gsub("Discharge.Diagnose.","",Diagnoses),
+      Diagnoses = gsub(" ",".",Diagnoses),
+    )
+
+top_four_diagnoses <- head(summary_stats[order(-Counts)],n=4)
+
+names(tabular_data) <- gsub("Discharge.Diagnose.","", names(tabular_data))
+names(tabular_data) <- gsub(" ",".", names(tabular_data))
+
+venn_diagnoses <- tabular_data[,copy(.SD),.SDcols=top_four_diagnoses$Diagnoses]
+computed_venn_data <- get_venn_stats(venn_diagnoses)
+denom <- venn_diagnoses[, .N]
+othr.episodes <- denom - sum(computed_venn_data)
+episodes <- round(c(othr.episodes, computed_venn_data), 0)
+episodes.p <- round(episodes*100/denom, 2)
+episodes <- paste0(episodes, "\n(", episodes.p, "%)")
+episodes[1] <-paste0("Not in top 4*\n", gsub("\n"," ",episodes[1]))
+venn.mat <- cbind(get.venn.mat(),episodes)
+colnames(venn.mat) <-gsub(".", "\n", c(paste0(top_four_diagnoses$Diagnoses,"\n\n"),"Counts"), fixed = T)
+class(venn.mat)<-"VennCounts"
+
+plot.venn(object = venn.mat,circle.col = c("red", "blue", "purple", "black"))
+
+```
+
+
+\newpage
+
+```{r echo=FALSE, warning=FALSE, message=FALSE, comment = NA, fig.pos='H', fig.height = 6, fig.width = 6}
+
+periods <- Dataset %>%
+  dplyr::filter(!(Admission.DateTime < as.Date("2018-01-01", formart = "%Y-%m-%d"))) %>%
+  dplyr::filter(Admission_Date < Sys.Date()) %>%
+  dplyr::filter(Admission.DateTime < Sys.Date()) %>%
+  dplyr::mutate(
+    Month.Year = lubridate::as_date(zoo::as.yearmon(Admission.DateTime))
+  ) %>%
+  dplyr::select(Month.Year) %>%
+  unique()
+  
+periods <- periods$Month.Year
+
+cores = (parallel::detectCores()) - 2
+cl <- parallel::makeCluster(cores) 
+doSNOW::registerDoSNOW(cl)
+
+finalMatrix <- foreach(i = 1:length(periods), #effect.size[1:length(effect.size)
+                       .combine = rbind,
+                       .packages=c("magrittr")) %dopar% {
+                         
+  Month_Date <- periods[i]
+                         
+  tabular_data <- Dataset %>%
+    dplyr::filter(lubridate::as_date(zoo::as.yearmon(Admission.DateTime)) == Month_Date) %>%
+    dplyr::filter(Admission_Date < Sys.Date()) %>%
+    dplyr::select(tidyr::contains("Admit.")) %>%
+    dplyr::select(-`Admit.Diagnose.No Diagnosis`) %>%
+    data.table::as.data.table()
+
+  summary_stats = as.data.frame(t(tabular_data[,lapply(.SD,get_summary_stats)]))
+  summary_stats <- data.table::setDT(summary_stats, keep.rownames = TRUE)[]
+  names(summary_stats) <- c("Diagnoses","Counts")
+  summary_stats <- data.table::as.data.table(summary_stats)
+  
+  summary_stats %<>% dplyr::filter(Diagnoses != "Admit.Diagnose.Other") %>%
+    dplyr::mutate(
+      Diagnoses = gsub("Admit.Diagnose.","",Diagnoses),
+      Diagnoses = gsub(" ",".",Diagnoses),
+    )
+  top_four_diagnoses <- head(summary_stats[order(-Counts)],n=4)
+  
+  names(tabular_data) <- gsub("Admit.Diagnose.","", names(tabular_data))
+  names(tabular_data) <- gsub(" ",".", names(tabular_data))
+  
+  venn_diagnoses <- tabular_data[,data.table::copy(.SD),.SDcols=top_four_diagnoses$Diagnoses]
+  
+  diagnosis.count <- venn_diagnoses %>%
+    dplyr::mutate(
+      Morbidity = rowSums(.),
+      Other = ifelse(Morbidity==0,T,F)
+    ) %>%
+    dplyr::summarise(
+      dplyr::across(where(is.logical),sum)
+    ) %>% 
+    t() %>%
+    as.data.frame() %>%
+    dplyr::mutate(Diagnoses = row.names(.)) %>%
+    dplyr::relocate(Diagnoses) %>%
+    dplyr::mutate(
+      Diagnoses = gsub("."," ",Diagnoses, fixed = T),
+      V2 = V1/sum(V1)
+    ) %>%
+    dplyr::rename(
+      Proportion = V2
+    ) %>%
+    dplyr::select(-V1)
+  
+  
+  diagnosis.count$`Calendar Date` <- Month_Date
+  diagnosis.count
+  
+}
+
+snow::stopCluster(cl)
+rm(cl)
+foreach::registerDoSEQ()
+
+
+
+results_adm <- as.data.frame(finalMatrix)
+
+results_adm %>%
+  tidyr::spread(key = Diagnoses, value = Proportion, fill = 0) %>%
+  tidyr::gather(key = Diagnoses, value = Proportion, - `Calendar Date`) %>%
+  dplyr::arrange(`Calendar Date`, Diagnoses) %>%
+  ggplot(aes(x = `Calendar Date`, y = Proportion, fill = Diagnoses)) +
+  geom_area(stat = "identity") + 
+  ggsci::scale_fill_d3() +
+  scale_y_continuous(labels = scales::percent, breaks =seq(0,1,.2), limits =c(0,1)) +
+  scale_x_date(date_labels = "%b\n%Y",
+               breaks = function(x) seq.Date(from = min(x), to = max(x), by = "6 months"),
+               minor_breaks = function(x) seq.Date(from = min(x), to = max(x), by = "3 months"),
+               limits = function(x) c(min(x), max(x) + months(1)),
+               expand = c(0.0, 0)) +
+  theme_minimal(base_family = "Corbel") +
+  labs(x= "Calendar Date", 
+       y= "Admissions with diagnosis (%)", 
+       title= "Admission diagnoses over time",
+       subtitle = "Top 4 diagnoses") +
+  theme(legend.position = "bottom") +
+  guides(fill=guide_legend(nrow=3, byrow=TRUE))
+
+```
+
+
+
+```{r echo=FALSE, warning=FALSE, message=FALSE, comment = NA, fig.pos='H', fig.height = 6, fig.width = 6}
+
+periods <- Dataset %>%
+  dplyr::filter(!(Discharge.DateTime < as.Date("2018-01-01", formart = "%Y-%m-%d"))) %>%
+  dplyr::mutate(
+    Month.Year = lubridate::as_date(zoo::as.yearmon(Discharge.DateTime))
+  ) %>%
+  dplyr::select(Month.Year) %>%
+  unique()
+  
+periods <- periods$Month.Year
+
+cores = (parallel::detectCores()) - 2
+cl <- parallel::makeCluster(cores) 
+doSNOW::registerDoSNOW(cl)
+
+finalMatrix <- foreach(i = 1:length(periods), #effect.size[1:length(effect.size)
+                       .combine = rbind,
+                       .packages=c("magrittr")) %dopar% {
+                         
+  Month_Date <- periods[i]
+                         
+  tabular_data <- Dataset %>%
+    dplyr::filter(lubridate::as_date(zoo::as.yearmon(Discharge.DateTime)) == Month_Date) %>%
+    dplyr::filter(Discharge_Date < Sys.Date()) %>%
+    dplyr::select(tidyr::contains("Discharge.Diagnose.")) %>%
+    dplyr::select(-`Discharge.Diagnose.No Diagnosis`) %>%
+    data.table::as.data.table()
+
+  summary_stats = as.data.frame(t(tabular_data[,lapply(.SD,get_summary_stats)]))
+  summary_stats <- data.table::setDT(summary_stats, keep.rownames = TRUE)[]
+  names(summary_stats) <- c("Diagnoses","Counts")
+  summary_stats <- data.table::as.data.table(summary_stats)
+  
+  summary_stats %<>% dplyr::filter(Diagnoses != "Discharge.Diagnose.Other") %>%
+    dplyr::mutate(
+      Diagnoses = gsub("Discharge.Diagnose.","",Diagnoses),
+      Diagnoses = gsub(" ",".",Diagnoses),
+    )
+  top_four_diagnoses <- head(summary_stats[order(-Counts)],n=4)
+  
+  names(tabular_data) <- gsub("Discharge.Diagnose.","", names(tabular_data))
+  names(tabular_data) <- gsub(" ",".", names(tabular_data))
+  
+  venn_diagnoses <- tabular_data[,data.table::copy(.SD),.SDcols=top_four_diagnoses$Diagnoses]
+  
+  diagnosis.count <- venn_diagnoses %>%
+    dplyr::mutate(
+      Morbidity = rowSums(.),
+      Other = ifelse(Morbidity==0,T,F)
+    ) %>%
+    dplyr::summarise(
+      dplyr::across(where(is.logical),sum)
+    ) %>% 
+    t() %>%
+    as.data.frame() %>%
+    dplyr::mutate(Diagnoses = row.names(.)) %>%
+    dplyr::relocate(Diagnoses) %>%
+    dplyr::mutate(
+      Diagnoses = gsub("."," ",Diagnoses, fixed = T),
+      V2 = V1/sum(V1)
+    ) %>%
+    dplyr::rename(
+      Proportion = V2
+    ) %>%
+    dplyr::select(-V1)
+  
+  
+  diagnosis.count$`Calendar Date` <- Month_Date
+  diagnosis.count
+  
+}
+
+snow::stopCluster(cl)
+rm(cl)
+foreach::registerDoSEQ()
+
+results <- as.data.frame(finalMatrix)
+
+results %>%
+  tidyr::drop_na() %>%
+  tidyr::spread(key = Diagnoses, value = Proportion, fill = 0) %>%
+  tidyr::gather(key = Diagnoses, value = Proportion, - `Calendar Date`) %>%
+  dplyr::arrange(`Calendar Date`, Diagnoses) %>%
+  ggplot(aes(x = `Calendar Date`, y = Proportion, fill = Diagnoses)) +
+  geom_area(stat = "identity") + 
+  ggsci::scale_fill_d3() +
+  scale_y_continuous(labels = scales::percent, breaks =seq(0,1,.2), limits =c(0,1)) +
+  scale_x_date(date_labels = "%b\n%Y",
+               breaks = function(x) seq.Date(from = min(x), to = max(x), by = "6 months"),
+               minor_breaks = function(x) seq.Date(from = min(x), to = max(x), by = "3 months"),
+               limits = function(x) c(min(x), max(x) + months(1)),
+               expand = c(0.0, 0)) +
+  theme_minimal(base_family = "Corbel") +
+  labs(x= "Calendar Date", 
+       y= "Discharge with diagnosis (%)", 
+       title= "Discharge diagnoses over time",
+       subtitle = "Top 4 diagnoses") +
+  theme(legend.position = "bottom") +
+  guides(fill=guide_legend(nrow=3, byrow=TRUE))
+
+```
+
+

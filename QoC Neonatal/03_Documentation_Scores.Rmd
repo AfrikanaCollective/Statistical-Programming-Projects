@@ -1,0 +1,1136 @@
+## CIN-Neonatal Documentation Scores
+
+```{r echo=FALSE, warning=FALSE, message=FALSE, fig.pos='H', comment = NA}
+Dataset <- data.table(read_csv("analysis.csv",guess_max = 80000, col_types = cols()))
+Dataset[ , key := .I]
+setkey(Dataset,key)
+
+rows.full <- nrow(Dataset)
+cat(paste0("Number of all observations in the dataset: ", rows.full))
+
+Dataset %<>%
+  filter(MinimumDataset == F)
+
+rows.after.exclude.one <- nrow(Dataset)
+
+cat(paste0("\n\nObservations with full dataset collection: ", 
+           rows.after.exclude.one))
+
+Dataset %<>%
+  filter(Admission_Date < Sys.Date()) %>%
+  filter(Admission_Date > as.Date("31-03-2014",format = "%d-%m-%Y"))
+
+rows.after.exclude.two <- nrow(Dataset)
+
+cat(paste0("\n\nObservations captured admissions between: 01 April 2014 and ", 
+format(max(Dataset$Admission_Date), "%d %B, %Y"),": ", rows.after.exclude.two))
+
+
+```
+
+\newpage
+
+```{r echo=FALSE, warning=FALSE, message=FALSE, fig.pos='H', comment = NA}
+
+getDocumentationScore <- function(rowData){
+  return(sum(!is.na(rowData)))
+}
+
+getPresenceScore <- function(rowData){
+  return(sum(!is.na(rowData)))
+}
+
+getOtherSignsDocumentationScore <- function(rowData){
+  if(!is.na(rowData$Can.Suck.Breastfeed) & rowData$Can.Suck.Breastfeed == F){
+    rowData %<>% dplyr::select(-Can.Suck.Breastfeed)
+    return(sum(!is.na(rowData)))
+  }else{
+    rowData %<>% dplyr::select(-Glucose.Ordered, -Can.Suck.Breastfeed)
+    return(sum(!is.na(rowData)))
+  }
+}
+  
+getOtherSignsDocumentationScoreDenom <- function(rowData){
+  if(!is.na(rowData$Can.Suck.Breastfeed) & rowData$Can.Suck.Breastfeed == F){
+    rowData %<>% dplyr::select(-Can.Suck.Breastfeed)
+    return(length(rowData))
+  }else{
+    rowData %<>% dplyr::select(-Glucose.Ordered, -Can.Suck.Breastfeed)
+    return(length(rowData))
+  }
+}
+  
+getTreatmentDocumentationScore <- function(rowData){
+  if((rowData$Genta.Prescribed == T) & (rowData$Pen.Prescribed == T)){
+    rowData %<>% dplyr::select(-Pen.Prescribed, -Genta.Prescribed)
+    return(sum(!is.na(rowData)))
+  }else if((rowData$Genta.Prescribed == T) & (rowData$Pen.Prescribed == F)){
+    rowData %<>% dplyr::select(-Genta.Prescribed,
+                               -Pen.Prescribed,
+                               -Pen.Dose.Orig,
+                               -Pen.Freq.Orig,
+                               -Pen.Route.Orig)
+    return(sum(!is.na(rowData)))
+  }else if((rowData$Genta.Prescribed == F) & (rowData$Pen.Prescribed == T)){
+    rowData %<>% dplyr::select(-Pen.Prescribed,
+                               -Genta.Prescribed,
+                               -Genta.Dose.Orig,
+                               -Genta.Freq.Orig,
+                               -Genta.Route.Orig)
+    return(sum(!is.na(rowData)))
+  }else{
+    return(NA)
+  }
+}
+  
+getTreatmentDocumentationScoreDenom <- function(rowData){
+  if((rowData$Genta.Prescribed == T) & (rowData$Pen.Prescribed == T)){
+    rowData %<>% dplyr::select(-Pen.Prescribed, -Genta.Prescribed)
+    return(length(rowData))
+  }else if((rowData$Genta.Prescribed == T) & (rowData$Pen.Prescribed == F)){
+    rowData %<>% dplyr::select(-Genta.Prescribed,
+                               -Pen.Prescribed,
+                               -Pen.Dose.Orig,
+                               -Pen.Freq.Orig,
+                               -Pen.Route.Orig)
+    return(length(rowData))
+  }else if((rowData$Genta.Prescribed == F) & (rowData$Pen.Prescribed == T)){
+    rowData %<>% dplyr::select(-Pen.Prescribed,
+                               -Genta.Prescribed,
+                               -Genta.Dose.Orig,
+                               -Genta.Freq.Orig,
+                               -Genta.Route.Orig)
+    return(length(rowData))
+  }else{
+    return(NA)
+  }
+}
+
+
+getFeedsDocumentationScore <- function(rowData){
+  if(!is.na(rowData$Can.Suck.Breastfeed) & (rowData$Can.Suck.Breastfeed == F)){
+    rowData %<>% dplyr::select(-Can.Suck.Breastfeed)
+    return(sum(!is.na(rowData)))
+  }else{
+    return(NA)
+  }
+}
+
+getFeedsDocumentationScoreDenom <- function(rowData){
+  if(!is.na(rowData$Can.Suck.Breastfeed) & (rowData$Can.Suck.Breastfeed == F)){
+    rowData %<>% dplyr::select(-Can.Suck.Breastfeed)
+    return(length(rowData))
+  }else{
+    return(NA)
+  }
+}
+
+getFluidsDocumentationScore <- function(rowData){
+  if(!is.na(rowData$Fluids.Prescribed) & (rowData$Fluids.Prescribed == T)){
+    rowData %<>% dplyr::select(-Fluids.Prescribed)
+    return(sum(!is.na(rowData)))
+  }else{
+    return(NA)
+  }
+}
+
+getFluidsDocumentationScoreDenom <- function(rowData){
+  if(!is.na(rowData$Fluids.Prescribed) & (rowData$Fluids.Prescribed == T)){
+    rowData %<>% dplyr::select(-Fluids.Prescribed)
+    return(length(rowData))
+  }else{
+    return(NA)
+  }
+}
+
+getVitalsDocumentationScore <- function(rowData){
+  if(!is.na(rowData$Weight.Monitoring.Recorded)){
+    rowData %<>% dplyr::select(-Weight.Monitoring.Recorded)
+    return(rowSums(rowData, na.rm = T))
+  }else{
+    rowData %<>% dplyr::select(-Weight.Monitoring.Recorded, -Times.Weight.Monitored.Multiple)
+    return(rowSums(rowData, na.rm = T))
+  }
+}
+
+getVitalsDocumentationScoreDenom <- function(rowData){
+  if(!is.na(rowData$Weight.Monitoring.Recorded)){
+    rowData %<>% dplyr::select(-Weight.Monitoring.Recorded)
+    return(length(rowData))
+  }else{
+    rowData %<>% dplyr::select(-Weight.Monitoring.Recorded, -Times.Weight.Monitored.Multiple)
+    return(length(rowData))
+  }
+}
+
+getSupportiveDocumentationScore <- function(rowData){
+    
+  rowData$Apgar.Recorded[!is.na(rowData$Apgar.Recorded) & rowData$Apgar.Recorded == F] <- NA
+  
+  if((rowData$Clinical.Diagnosis.RDS==T) & 
+     (!is.na(rowData$Birth.Weight.Below.2kg) & (rowData$Birth.Weight.Below.2kg == T)) &
+     (rowData$Born.Before.Arrival == F)
+     ){
+    rowData %<>% dplyr::select(-Clinical.Diagnosis.RDS, 
+                               -Birth.Weight.Below.2kg, 
+                               -Born.Before.Arrival)
+    return(sum(!is.na(rowData)))
+  }
+  
+  # 3 combination 2
+  else if((rowData$Clinical.Diagnosis.RDS==T) & 
+           (!is.na(rowData$Birth.Weight.Below.2kg) & (rowData$Birth.Weight.Below.2kg == T)) &
+           (rowData$Born.Before.Arrival == T)) {
+     rowData %<>% dplyr::select(-Clinical.Diagnosis.RDS,
+                                -Apgar.Recorded,
+                                -Birth.Weight.Below.2kg, 
+                                -Born.Before.Arrival)
+    return(sum(!is.na(rowData)))
+  }else if((rowData$Clinical.Diagnosis.RDS==F) & 
+           (!is.na(rowData$Birth.Weight.Below.2kg) & (rowData$Birth.Weight.Below.2kg == T)) &
+           (rowData$Born.Before.Arrival == F)) {
+     rowData %<>% dplyr::select(-Clinical.Diagnosis.RDS,
+                                -CPAP,
+                                -Birth.Weight.Below.2kg, 
+                                -Born.Before.Arrival)
+    return(sum(!is.na(rowData)))
+  }else if((rowData$Clinical.Diagnosis.RDS==T) & 
+           ((!is.na(rowData$Birth.Weight.Below.2kg) & (rowData$Birth.Weight.Below.2kg == F)) | is.na(rowData$Birth.Weight.Below.2kg)) &
+           (rowData$Born.Before.Arrival == F)) {
+     rowData %<>% dplyr::select(-Clinical.Diagnosis.RDS,
+                                -KMC,
+                                -Birth.Weight.Below.2kg, 
+                                -Born.Before.Arrival)
+    return(sum(!is.na(rowData)))
+  }
+  # 3 combination 1
+  else if((rowData$Clinical.Diagnosis.RDS==F) & 
+           ((!is.na(rowData$Birth.Weight.Below.2kg) & (rowData$Birth.Weight.Below.2kg == F)) | is.na(rowData$Birth.Weight.Below.2kg)) &
+           (rowData$Born.Before.Arrival == F)){
+             rowData %<>% dplyr::select(-CPAP,
+                                        -Clinical.Diagnosis.RDS,
+                                        -KMC,
+                                        -Birth.Weight.Below.2kg, 
+                                        -Born.Before.Arrival)
+    return(sum(!is.na(rowData)))
+  }else if((rowData$Clinical.Diagnosis.RDS==F) & 
+           (!is.na(rowData$Birth.Weight.Below.2kg) & (rowData$Birth.Weight.Below.2kg == T)) &
+           (rowData$Born.Before.Arrival == T)){
+             rowData %<>% dplyr::select(-CPAP,
+                                        -Clinical.Diagnosis.RDS,
+                                        -Birth.Weight.Below.2kg,
+                                        -Apgar.Recorded,
+                                        -Born.Before.Arrival)
+    return(sum(!is.na(rowData)))
+  }else if((rowData$Clinical.Diagnosis.RDS==T) & 
+           ((!is.na(rowData$Birth.Weight.Below.2kg) & (rowData$Birth.Weight.Below.2kg == F)) | is.na(rowData$Birth.Weight.Below.2kg)) &
+           (rowData$Born.Before.Arrival == T)){
+             rowData %<>% dplyr::select(-Clinical.Diagnosis.RDS,
+                                        -KMC,
+                                        -Birth.Weight.Below.2kg,
+                                        -Apgar.Recorded,
+                                        -Born.Before.Arrival)
+    return(sum(!is.na(rowData)))
+  }else if((rowData$Clinical.Diagnosis.RDS==F) & 
+           ((!is.na(rowData$Birth.Weight.Below.2kg) & (rowData$Birth.Weight.Below.2kg == F)) | is.na(rowData$Birth.Weight.Below.2kg)) &
+           (rowData$Born.Before.Arrival == T)) {
+     return(NA)
+  }
+}
+
+getSupportiveDocumentationScoreDenom <- function(rowData){
+  if((rowData$Clinical.Diagnosis.RDS==T) & 
+     (!is.na(rowData$Birth.Weight.Below.2kg) & (rowData$Birth.Weight.Below.2kg == T)) &
+     (rowData$Born.Before.Arrival == F)
+     ){
+    rowData %<>% dplyr::select(-Clinical.Diagnosis.RDS, 
+                               -Birth.Weight.Below.2kg, 
+                               -Born.Before.Arrival)
+    return(length(rowData))
+  }
+  
+  # 3 combination 2
+  else if((rowData$Clinical.Diagnosis.RDS==T) & 
+           (!is.na(rowData$Birth.Weight.Below.2kg) & (rowData$Birth.Weight.Below.2kg == T)) &
+           (rowData$Born.Before.Arrival == T)) {
+     rowData %<>% dplyr::select(-Clinical.Diagnosis.RDS,
+                                -Apgar.Recorded,
+                                -Birth.Weight.Below.2kg, 
+                                -Born.Before.Arrival)
+    return(length(rowData))
+  }else if((rowData$Clinical.Diagnosis.RDS==F) & 
+           (!is.na(rowData$Birth.Weight.Below.2kg) & (rowData$Birth.Weight.Below.2kg == T)) &
+           (rowData$Born.Before.Arrival == F)) {
+     rowData %<>% dplyr::select(-Clinical.Diagnosis.RDS,
+                                -CPAP,
+                                -Birth.Weight.Below.2kg, 
+                                -Born.Before.Arrival)
+    return(length(rowData))
+  }else if((rowData$Clinical.Diagnosis.RDS==T) & 
+           ((!is.na(rowData$Birth.Weight.Below.2kg) & (rowData$Birth.Weight.Below.2kg == F)) | is.na(rowData$Birth.Weight.Below.2kg)) &
+           (rowData$Born.Before.Arrival == F)) {
+     rowData %<>% dplyr::select(-Clinical.Diagnosis.RDS,
+                                -KMC,
+                                -Birth.Weight.Below.2kg, 
+                                -Born.Before.Arrival)
+    return(length(rowData))
+  }
+  # 3 combination 1
+  else if((rowData$Clinical.Diagnosis.RDS==F) & 
+           ((!is.na(rowData$Birth.Weight.Below.2kg) & (rowData$Birth.Weight.Below.2kg == F)) | is.na(rowData$Birth.Weight.Below.2kg)) &
+           (rowData$Born.Before.Arrival == F)){
+             rowData %<>% dplyr::select(-CPAP,
+                                        -Clinical.Diagnosis.RDS,
+                                        -KMC,
+                                        -Birth.Weight.Below.2kg, 
+                                        -Born.Before.Arrival)
+    return(length(rowData))
+  }else if((rowData$Clinical.Diagnosis.RDS==F) & 
+           (!is.na(rowData$Birth.Weight.Below.2kg) & (rowData$Birth.Weight.Below.2kg == T)) &
+           (rowData$Born.Before.Arrival == T)){
+             rowData %<>% dplyr::select(-CPAP,
+                                        -Clinical.Diagnosis.RDS,
+                                        -Birth.Weight.Below.2kg,
+                                        -Apgar.Recorded,
+                                        -Born.Before.Arrival)
+    return(length(rowData))
+  }else if((rowData$Clinical.Diagnosis.RDS==T) & 
+           ((!is.na(rowData$Birth.Weight.Below.2kg) & (rowData$Birth.Weight.Below.2kg == F)) | is.na(rowData$Birth.Weight.Below.2kg)) &
+           (rowData$Born.Before.Arrival == T)){
+             rowData %<>% dplyr::select(-Clinical.Diagnosis.RDS,
+                                        -KMC,
+                                        -Birth.Weight.Below.2kg,
+                                        -Apgar.Recorded,
+                                        -Born.Before.Arrival)
+    return(length(rowData))
+  }else if((rowData$Clinical.Diagnosis.RDS==F) & 
+           ((!is.na(rowData$Birth.Weight.Below.2kg) & (rowData$Birth.Weight.Below.2kg == F)) | is.na(rowData$Birth.Weight.Below.2kg)) &
+           (rowData$Born.Before.Arrival == T)) {
+     return(NA)
+  }
+}
+
+if(!file.exists("Documentation_Score.rds")){
+  
+  Dataset[Admission.Diagnosis.Count==0, Admission.Diagnosis.Count:=NA]
+  Dataset[Discharge.Diagnosis.Count==0, Discharge.Diagnosis.Count:=NA]
+  Dataset$Apgar.Score.5min[Dataset$Apgar.Score.5min == "Not Documented"] <- NA
+  
+  Demographics <- Dataset %>%
+    dplyr::select(
+      key,
+      # Demographics
+      Male,
+      Age,
+      Gestational.Age,
+      Birth.Weight,
+    ) %>%
+    dplyr::rowwise() %>%
+    dplyr::mutate(
+      Demographics = getDocumentationScore(dplyr::across(Male:Birth.Weight)),
+      Denom.Demographics = length(dplyr::across(Male:Birth.Weight))
+    ) %>%
+    dplyr::select(
+      key,
+      Demographics,
+      Denom.Demographics
+    )
+  
+  Admission <- Dataset %>%
+    dplyr::select(
+      key,
+      # Admission
+      NAR.Use.Recorded,
+      Birth.DateTime,
+      Admission.DateTime,
+      Weight.Now,
+      Delivery,
+      Apgar.Score.5min,
+      Admission.Diagnosis.Count,
+    ) %>%
+    dplyr::mutate(
+      NAR.Use.Recorded = ifelse(NAR.Use.Recorded, T, NA)
+    ) %>%
+    dplyr::rowwise() %>%
+    dplyr::mutate(
+      `Admission Information` = getDocumentationScore(dplyr::across(NAR.Use.Recorded:Admission.Diagnosis.Count)),
+      `Denom.Admission Information` = length(dplyr::across(NAR.Use.Recorded:Admission.Diagnosis.Count))
+    ) %>%
+    dplyr::select(
+      key,
+      `Admission Information`,
+      `Denom.Admission Information`
+    )
+  
+  Discharge <- Dataset %>%
+    dplyr::select(
+      key,
+      # Admission
+      Discharge.DateTime,
+      Discharge.Weight,
+      Outcome,
+      Discharge.Diagnosis.Count,
+    ) %>%
+    dplyr::rowwise() %>%
+    dplyr::mutate(
+      `Discharge Information` = getDocumentationScore(dplyr::across(Discharge.DateTime:Discharge.Diagnosis.Count)),
+      `Denom.Discharge Information` = length(dplyr::across(Discharge.DateTime:Discharge.Diagnosis.Count)),
+    ) %>%
+    dplyr::select(
+      key,
+      `Discharge Information`,
+      `Denom.Discharge Information`
+    )
+  
+  Maternal <- Dataset %>%
+    dplyr::select(
+      key,
+      # Admission
+      Maternal.Age,
+      Maternal.HIV,
+      Maternal.VRDL,
+      Maternal.Gravidity,
+      Maternal.Parity,
+    ) %>%
+    dplyr::rowwise() %>%
+    dplyr::mutate(
+      `Maternal History` = getDocumentationScore(dplyr::across(Maternal.Age:Maternal.Parity)),
+      `Denom.Maternal History` = length(dplyr::across(Maternal.Age:Maternal.Parity))
+    ) %>%
+    dplyr::select(
+      key,
+      `Maternal History`,
+      `Denom.Maternal History`
+    )
+  
+  
+  Complaints <- Dataset %>%
+    dplyr::select(
+      key,
+      # Complaints
+      Temparature,
+      Fever,
+      Convulsions,
+      Difficulty.Breathing,
+      Difficulty.Feeding,
+      Vomiting,
+      Apnoea,
+    ) %>%
+    dplyr::rowwise() %>%
+    dplyr::mutate(
+      `Presenting Complaints` = getDocumentationScore(dplyr::across(Temparature:Apnoea)),
+      `Denom.Presenting Complaints` = length(dplyr::across(Temparature:Apnoea))
+    ) %>%
+    dplyr::select(
+      key,
+      `Presenting Complaints`,
+      `Denom.Presenting Complaints`
+    )
+  
+  Signs <- Dataset %>%
+    dplyr::select(
+      key,
+      # Cardinal Signs
+      Grunting,
+      Central.Cyanosis,
+      Bulging.Fontanelle,
+      Floppy,
+    ) %>%
+    dplyr::rowwise() %>%
+    dplyr::mutate(
+      `Cardinal Signs` = getDocumentationScore(dplyr::across(Grunting:Floppy)),
+      `Denom.Cardinal Signs` = length(dplyr::across(Grunting:Floppy))
+    ) %>%
+    dplyr::select(
+      key,
+      `Cardinal Signs`,
+       `Denom.Cardinal Signs`
+    )
+  
+  
+  Other <- Dataset %>%
+    dplyr::select(
+      key,
+      # Other signs
+      Can.Suck.Breastfeed,
+      Bilateral.Air.Entry,
+      Crackles,
+      Indrawing,
+      Capillary.Refill,
+      Pallor.Anaemia,
+      Eye.Pus.Infection,
+      Umbilical.Infection,
+      Skin.Rushes,
+      Irritable,
+      Jaundice,
+      Gestational.Size,
+      Glucose.Ordered,
+    ) %>%
+    dplyr::rowwise() %>%
+    dplyr::mutate(
+      `Other Signs` = getOtherSignsDocumentationScore(dplyr::across(Can.Suck.Breastfeed:Glucose.Ordered)),
+      `Denom.Other Signs` = getOtherSignsDocumentationScoreDenom(dplyr::across(Can.Suck.Breastfeed:Glucose.Ordered))
+    ) %>%
+    dplyr::select(
+      key,
+      `Other Signs`,
+      `Denom.Other Signs`
+    )
+  
+  
+  Antibiotics <- Dataset %>%
+    dplyr::select(
+      key,
+      # Treatment
+      Age,
+      Birth.Weight,
+      Genta.Prescribed,
+      Genta.Dose.Orig,
+      Genta.Freq.Orig,
+      Genta.Route.Orig,
+      Pen.Prescribed,
+      Pen.Dose.Orig,
+      Pen.Freq.Orig,
+      Pen.Route.Orig,
+    ) %>%
+    dplyr::rowwise() %>%
+    dplyr::mutate(
+      `First Line Antibiotics` = getTreatmentDocumentationScore(dplyr::across(Age:Pen.Route.Orig)),
+      `Denom.First Line Antibiotics` = getTreatmentDocumentationScoreDenom(dplyr::across(Age:Pen.Route.Orig))
+    ) %>%
+    dplyr::select(
+      key,
+      `First Line Antibiotics`,
+      `Denom.First Line Antibiotics`
+    )
+  
+  
+  Feeds <- Dataset %>%
+    dplyr::select(
+      key,
+      # Feeds
+      Can.Suck.Breastfeed,
+      Age,
+      Birth.Weight,
+      Feeds.Route,
+      Feeds.Frequency,
+      Feeds.Volume,
+    ) %>%
+    dplyr::rowwise() %>%
+    dplyr::mutate(
+      `Feeds` = getFeedsDocumentationScore(dplyr::across(Can.Suck.Breastfeed:Feeds.Volume)),
+      `Denom.Feeds` = getFeedsDocumentationScoreDenom(dplyr::across(Can.Suck.Breastfeed:Feeds.Volume))
+    ) %>%
+    dplyr::select(
+      key,
+      Feeds,
+      `Denom.Feeds`
+    )
+  
+  Fluids <- Dataset %>%
+    dplyr::select(
+      key,
+      # Fluids
+      Fluids.Prescribed,
+      Age,
+      Birth.Weight,
+      Fluids.Duration,
+      Fluids.Volume,
+    ) %>%
+    dplyr::rowwise() %>%
+    dplyr::mutate(
+      `Fluids` = getFluidsDocumentationScore(dplyr::across(Fluids.Prescribed:Fluids.Volume)),
+      `Denom.Fluids` = getFluidsDocumentationScoreDenom(dplyr::across(Fluids.Prescribed:Fluids.Volume)),
+    ) %>%
+    dplyr::select(
+      key,
+      Fluids,
+      `Denom.Fluids`
+    )
+
+  
+  Vitals <- Dataset %>%
+    dplyr::select(
+      key,
+      # Vitals
+      Weight.Monitoring.Recorded,
+      Times.Weight.Monitored.Multiple,
+      Vitals.Pulse.Rate.Recorded,
+      Vitals.Temp.Recorded,
+      Vitals.Pulse.Oximetry.Recorded,
+      Vitals.Respiratory.Rate.Recorded,
+    ) %>%
+    dplyr::rowwise() %>%
+    dplyr::mutate(
+      `Monitoring` = getVitalsDocumentationScore(dplyr::across(Weight.Monitoring.Recorded:Vitals.Respiratory.Rate.Recorded)),
+      `Denom.Monitoring` = getVitalsDocumentationScoreDenom(dplyr::across(Weight.Monitoring.Recorded:Vitals.Respiratory.Rate.Recorded)),
+      
+    ) %>%
+    dplyr::select(
+      key,
+      Monitoring,
+      `Denom.Monitoring`
+    )
+  
+
+  Supportive <- Dataset %>%
+    dplyr::select(
+      key,
+      # Supportive
+      CPAP,
+      Clinical.Diagnosis.RDS,
+      KMC,
+      Birth.Weight.Below.2kg,
+      Apgar.Recorded,
+      Born.Before.Arrival
+    ) %>%
+    dplyr::rowwise() %>%
+    dplyr::mutate(
+      `Supportive Care` = getSupportiveDocumentationScore(dplyr::across(CPAP:Born.Before.Arrival)),
+      `Denom.Supportive Care` = getSupportiveDocumentationScoreDenom(dplyr::across(CPAP:Born.Before.Arrival)),
+    ) %>%
+    dplyr::select(
+      key,
+      `Supportive Care`,
+      `Denom.Supportive Care`
+    )
+  
+  Documentation.Score <- merge(Demographics, Admission, by = "key") %>%
+    merge(.,Discharge, by = "key") %>%
+    merge(.,Maternal, by = "key") %>%
+    merge(.,Complaints, by = "key") %>%
+    merge(.,Signs, by = "key") %>%
+    merge(.,Other, by = "key") %>%
+    merge(.,Antibiotics, by = "key") %>%
+    merge(.,Fluids, by = "key") %>%
+    merge(.,Feeds, by = "key") %>%
+    merge(.,Vitals, by = "key") %>%
+    merge(.,Supportive, by = "key")
+  
+  
+  saveRDS(Documentation.Score, "Documentation_Score.rds")
+
+}else{
+  Documentation.Score <- readRDS(file = "Documentation_Score.rds")
+}
+
+
+
+
+```
+
+
+
+```{r echo=FALSE, warning=FALSE, message=FALSE, fig.pos='H', comment = NA}
+
+Validate_Scores <- Dataset %>%
+    dplyr::select(
+      key,
+      Hospital,
+      Male,
+      Age,
+      Gestational.Age,
+      Birth.Weight,
+      NAR.Use.Recorded,
+      Birth.DateTime,
+      Admission.DateTime,
+      Weight.Now,
+      Delivery,
+      Apgar.Score.5min,
+      Admission.Diagnosis.Count,
+      Discharge.DateTime,
+      Discharge.Weight,
+      Outcome,
+      Discharge.Diagnosis.Count,
+      Maternal.Age,
+      Maternal.HIV,
+      Maternal.VRDL,
+      Maternal.Gravidity,
+      Maternal.Parity,
+      Temparature,
+      Fever,
+      Convulsions,
+      Difficulty.Breathing,
+      Difficulty.Feeding,
+      Vomiting,
+      Apnoea,
+      Grunting,
+      Central.Cyanosis,
+      Bulging.Fontanelle,
+      Floppy,
+      Can.Suck.Breastfeed,
+      Bilateral.Air.Entry,
+      Crackles,
+      Indrawing,
+      Capillary.Refill,
+      Pallor.Anaemia,
+      Eye.Pus.Infection,
+      Umbilical.Infection,
+      Skin.Rushes,
+      Irritable,
+      Jaundice,
+      Gestational.Size,
+      Glucose.Ordered,
+      Genta.Prescribed,
+      Genta.Dose.Orig,
+      Genta.Freq.Orig,
+      Genta.Route.Orig,
+      Pen.Prescribed,
+      Pen.Dose.Orig,
+      Pen.Freq.Orig,
+      Pen.Route.Orig,
+      Can.Suck.Breastfeed,
+      Feeds.Route,
+      Feeds.Frequency,
+      Feeds.Volume,
+      Fluids.Prescribed,
+      Fluids.Duration,
+      Fluids.Volume,
+      Weight.Monitoring.Recorded,
+      Times.Weight.Monitored.Multiple,
+      Vitals.Pulse.Rate.Recorded,
+      Vitals.Temp.Recorded,
+      Vitals.Pulse.Oximetry.Recorded,
+      Vitals.Respiratory.Rate.Recorded,
+      CPAP,
+      Clinical.Diagnosis.RDS,
+      KMC,
+      Birth.Weight.Below.2kg,
+      Apgar.Recorded,
+      Born.Before.Arrival
+    ) %>%
+  merge(Documentation.Score, by = "key")
+
+saveRDS(Validate_Scores, "Scores.rds")
+
+
+```
+
+
+
+```{r echo=FALSE, warning=FALSE, message=FALSE, fig.pos='H', comment = NA}
+plot.Demographics <- Validate_Scores %>%
+  dplyr::filter(!(Hospital %in% c("Bondo DH", "Karatina District Hospital"))) %>%
+  dplyr::filter(!(Admission.DateTime < as.Date("2018-01-01", formart = "%Y-%m-%d"))) %>%
+  dplyr::mutate(
+    Month.Year = lubridate::as_date(zoo::as.yearqtr(Admission.DateTime))
+  ) %>%
+  dplyr::group_by(Hospital, Month.Year) %>%
+  dplyr::summarise(
+    `Score` = sum(Demographics, na.rm = T),
+    `Denominator` = sum(Denom.Demographics, na.rm = T),
+    `Rate` = round(Score/Denominator,4)
+  ) %>%
+  dplyr::ungroup() 
+
+plot.Demographics %>% ggplot() +
+  geom_point(aes(x = Month.Year, y = Rate, group = Hospital, color = Hospital)) +
+  ggsci::scale_color_d3(palette = "category20b") + 
+  geom_smooth(aes(x = Month.Year, y = Rate), data = plot.Demographics, method = "loess", formula = 'y ~ x') +
+  scale_y_continuous(labels = scales::percent, breaks =seq(0,1,.2), limits =c(0,1)) +
+  scale_x_date(date_labels = "%b\n%Y",
+               breaks = function(x) seq.Date(from = min(x), to = max(x), by = "6 months"),
+               minor_breaks = function(x) seq.Date(from = min(x), to = max(x), by = "3 months"),
+               limits = function(x) c(min(x)- months(1), max(x) + months(1)),
+               expand = c(0.0, 0)) +
+  theme_minimal(base_family = "Corbel") +
+  labs(x= "Calendar Date", 
+       y= "Percentage Documentation", 
+       title= "Demographics",
+       caption = "Each unique colour-coded point represents an individual hospital") +
+  theme(legend.position = "none")+
+  theme(plot.title = element_text(hjust = 0.5))
+
+
+```
+
+
+
+```{r echo=FALSE, warning=FALSE, message=FALSE, fig.pos='H', comment = NA}
+plot.admission.information <- Validate_Scores %>%
+  dplyr::filter(!(Hospital %in% c("Bondo DH", "Karatina District Hospital"))) %>%
+  dplyr::filter(!(Admission.DateTime < as.Date("2018-01-01", formart = "%Y-%m-%d"))) %>%
+  dplyr::mutate(
+    Month.Year = lubridate::as_date(zoo::as.yearqtr(Admission.DateTime))
+  ) %>%
+  dplyr::group_by(Hospital, Month.Year) %>%
+  dplyr::summarise(
+    `Score` = sum( `Admission Information`, na.rm = T),
+    `Denominator` = sum(`Denom.Admission Information`, na.rm = T),
+    `Rate` = round(Score/Denominator,4)) %>%
+  dplyr::ungroup() 
+
+plot.admission.information %>% ggplot() +
+  geom_point(aes(x = Month.Year, y = Rate, group = Hospital, color = Hospital)) +
+  ggsci::scale_color_d3(palette = "category20b") + 
+  geom_smooth(aes(x = Month.Year, y = Rate), data = plot.admission.information, method = "loess", formula = 'y ~ x') +
+  scale_y_continuous(labels = scales::percent, breaks =seq(0,1,.2), limits =c(0.,1)) +
+  scale_x_date(date_labels = "%b\n%Y",
+               breaks = function(x) seq.Date(from = min(x), to = max(x), by = "6 months"),
+               minor_breaks = function(x) seq.Date(from = min(x), to = max(x), by = "3 months"),
+               limits = function(x) c(min(x)- months(1), max(x) + months(1)),
+               expand = c(0.0, 0)) +
+  theme_minimal(base_family = "Corbel") +
+  labs(x= "Calendar Date", 
+       y= "% Documentation", 
+       title= "Admission Information",
+       caption = "Each unique colour-coded point represents an individual hospital") +
+  theme(legend.position = "none")+
+  theme(plot.title = element_text(hjust = 0.5))
+```
+
+
+
+```{r echo=FALSE, warning=FALSE, message=FALSE, fig.pos='H', comment = NA}
+plot.discharge.information <- Validate_Scores %>%
+  dplyr::filter(!(Hospital %in% c("Bondo DH", "Karatina District Hospital"))) %>%
+  dplyr::filter(!(Admission.DateTime < as.Date("2018-01-01", formart = "%Y-%m-%d"))) %>%
+  dplyr::mutate(
+    Month.Year = lubridate::as_date(zoo::as.yearqtr(Admission.DateTime))
+  ) %>%
+  dplyr::group_by(Hospital, Month.Year) %>%
+  dplyr::summarise(
+    `Score` = sum( `Discharge Information`, na.rm = T),
+    `Denominator` = sum(`Denom.Discharge Information`, na.rm = T),
+    `Rate` = round(Score/Denominator,4)) %>%
+dplyr::ungroup() 
+
+plot.discharge.information %>% ggplot() +
+  geom_point(aes(x = Month.Year, y = Rate, group = Hospital, color = Hospital)) +
+  ggsci::scale_color_d3(palette = "category20b") + 
+  geom_smooth(aes(x = Month.Year, y = Rate), data = plot.discharge.information, method = "loess", formula = 'y ~ x') +
+  scale_y_continuous(labels = scales::percent, breaks =seq(0,1,.2), limits =c(0.,1)) +
+  scale_x_date(date_labels = "%b\n%Y",
+               breaks = function(x) seq.Date(from = min(x), to = max(x), by = "6 months"),
+               minor_breaks = function(x) seq.Date(from = min(x), to = max(x), by = "3 months"),
+               limits = function(x) c(min(x)- months(1), max(x) + months(1)),
+               expand = c(0.0, 0)) +
+  theme_minimal(base_family = "Corbel") +
+  labs(x= "Calendar Date", 
+       y= "Percentage Documentation", 
+       title= "Discharge Information",
+       caption = "Each unique colour-coded point represents an individual hospital") +
+  theme(legend.position = "none")+
+  theme(plot.title = element_text(hjust = 0.5))
+
+```
+
+
+```{r echo=FALSE, warning=FALSE, message=FALSE, fig.pos='H', comment = NA}
+plot.Maternal.history <- Validate_Scores %>%
+  dplyr::filter(!(Hospital %in% c("Bondo DH", "Karatina District Hospital"))) %>%
+  dplyr::filter(!(Admission.DateTime < as.Date("2018-01-01", formart = "%Y-%m-%d"))) %>%
+  dplyr::mutate(
+    Month.Year = lubridate::as_date(zoo::as.yearqtr(Admission.DateTime))
+  ) %>%
+  dplyr::group_by(Hospital, Month.Year) %>%
+  dplyr::summarise(
+    `Score` = sum( `Maternal History`, na.rm = T),
+    `Denominator` = sum(`Denom.Maternal History`, na.rm = T),
+    `Rate` = round(Score/Denominator,4)) %>%
+dplyr::ungroup() 
+
+plot.Maternal.history %>% ggplot() +
+  geom_point(aes(x = Month.Year, y = Rate, group = Hospital, color = Hospital)) +
+  ggsci::scale_color_d3(palette = "category20b") + 
+  geom_smooth(aes(x = Month.Year, y = Rate), data = plot.Maternal.history, method = "loess", formula = 'y ~ x') +
+  scale_y_continuous(labels = scales::percent, breaks =seq(0,1,.2), limits =c(0,1)) +
+  scale_x_date(date_labels = "%b\n%Y",
+               breaks = function(x) seq.Date(from = min(x), to = max(x), by = "6 months"),
+               minor_breaks = function(x) seq.Date(from = min(x), to = max(x), by = "3 months"),
+               limits = function(x) c(min(x)- months(1), max(x) + months(1)),
+               expand = c(0.0, 0)) +
+  theme_minimal(base_family = "Corbel") +
+  labs(x= "Calendar Date", 
+       y= "Percentage Documentation", 
+       title= "Maternal History",
+       caption = "Each unique colour-coded point represents an individual hospital") +
+  theme(legend.position = "none")+
+  theme(plot.title = element_text(hjust = 0.5))
+```
+
+
+```{r echo=FALSE, warning=FALSE, message=FALSE, fig.pos='H', comment = NA}
+plot.presenting.complains <- Validate_Scores %>%
+  dplyr::filter(!(Hospital %in% c("Bondo DH", "Karatina District Hospital"))) %>%
+  dplyr::filter(!(Admission.DateTime < as.Date("2018-01-01", formart = "%Y-%m-%d"))) %>%
+  dplyr::mutate(
+    Month.Year = lubridate::as_date(zoo::as.yearqtr(Admission.DateTime))
+  ) %>%
+  dplyr::group_by(Hospital, Month.Year) %>%
+  dplyr::summarise(
+    `Score` = sum( `Presenting Complaints`, na.rm = T),
+    `Denominator` = sum(`Denom.Presenting Complaints`, na.rm = T),
+    `Rate` = round(Score/Denominator,4)) %>%
+dplyr::ungroup() 
+
+plot.presenting.complains %>% ggplot() +
+  geom_point(aes(x = Month.Year, y = Rate, group = Hospital, color = Hospital)) +
+  ggsci::scale_color_d3(palette = "category20b") + 
+  geom_smooth(aes(x = Month.Year, y = Rate), data = plot.presenting.complains, method = "loess", formula = 'y ~ x') +
+  scale_y_continuous(labels = scales::percent, breaks =seq(0,1,.2), limits =c(0,1)) +
+  scale_x_date(date_labels = "%b\n%Y",
+               breaks = function(x) seq.Date(from = min(x), to = max(x), by = "6 months"),
+               minor_breaks = function(x) seq.Date(from = min(x), to = max(x), by = "3 months"),
+               limits = function(x) c(min(x)- months(1), max(x) + months(1)),
+               expand = c(0.0, 0)) +
+  theme_minimal(base_family = "Corbel") +
+  labs(x= "Calendar Date", 
+       y= "Percentage Documentation", 
+       title= "Presenting complaints",
+       caption = "Each unique colour-coded point represents an individual hospital") +
+  theme(legend.position = "none")+
+  theme(plot.title = element_text(hjust = 0.5))
+
+```
+
+
+```{r echo=FALSE, warning=FALSE, message=FALSE, fig.pos='H', comment = NA}
+plot.cardinal.signs <- Validate_Scores %>%
+  dplyr::filter(!(Hospital %in% c("Bondo DH", "Karatina District Hospital"))) %>%
+  dplyr::filter(!(Admission.DateTime < as.Date("2018-01-01", formart = "%Y-%m-%d"))) %>%
+  dplyr::mutate(
+    Month.Year = lubridate::as_date(zoo::as.yearqtr(Admission.DateTime))
+  ) %>%
+  dplyr::group_by(Hospital, Month.Year) %>%
+  dplyr::summarise(
+    `Score` = sum( `Cardinal Signs`, na.rm = T),
+    `Denominator` = sum(`Denom.Cardinal Signs`, na.rm = T),
+    `Rate` = round(Score/Denominator,4)) %>%
+  dplyr::ungroup() 
+
+plot.cardinal.signs %>% ggplot() +
+  geom_point(aes(x = Month.Year, y = Rate, group = Hospital, color = Hospital)) +
+  ggsci::scale_color_d3(palette = "category20b") + 
+  geom_smooth(aes(x = Month.Year, y = Rate), data = plot.cardinal.signs, method = "loess", formula = 'y ~ x') +
+  scale_y_continuous(labels = scales::percent, breaks =seq(0,1,.2), limits =c(0.,1)) +
+  scale_x_date(date_labels = "%B\n%Y",
+               breaks = function(x) seq.Date(from = min(x), to = max(x), by = "6 months"),
+               minor_breaks = function(x) seq.Date(from = min(x), to = max(x), by = "3 months"),
+               limits = function(x) c(min(x)- months(1), max(x) + months(1)),
+               expand = c(0.0, 0)) +
+  theme_minimal(base_family = "Corbel") +
+  labs(x= "Calendar Date", 
+       y= "Percentage Documentation", 
+       title= "Cardinal signs on examination ",
+       caption = "Each unique colour-coded point represents an individual hospital") +
+  theme(legend.position = "none")+
+  theme(plot.title = element_text(hjust = 0.5))
+
+```
+
+
+```{r echo=FALSE, warning=FALSE, message=FALSE, fig.pos='H', comment = NA}
+plot.other.signs <- Validate_Scores %>%
+  dplyr::filter(!(Hospital %in% c("Bondo DH", "Karatina District Hospital"))) %>%
+  dplyr::filter(!(Admission.DateTime < as.Date("2018-01-01", formart = "%Y-%m-%d"))) %>%
+  dplyr::mutate(
+    Month.Year = lubridate::as_date(zoo::as.yearqtr(Admission.DateTime))
+  ) %>%
+  dplyr::group_by(Hospital, Month.Year) %>%
+  dplyr::summarise(
+    `Score` = sum( `Other Signs`, na.rm = T),
+    `Denominator` = sum(`Denom.Other Signs`, na.rm = T),
+    `Rate` = round(Score/Denominator,4)) %>%
+  dplyr::ungroup() 
+
+plot.other.signs %>% ggplot() +
+  geom_point(aes(x = Month.Year, y = Rate, group = Hospital, color = Hospital)) +
+  ggsci::scale_color_d3(palette = "category20b") + 
+  geom_smooth(aes(x = Month.Year, y = Rate), data = plot.other.signs, method = "loess", formula = 'y ~ x') +
+  scale_y_continuous(labels = scales::percent, breaks =seq(0,1,.2), limits =c(0.,1)) +
+  scale_x_date(date_labels = "%b\n%Y",
+               breaks = function(x) seq.Date(from = min(x), to = max(x), by = "6 months"),
+               minor_breaks = function(x) seq.Date(from = min(x), to = max(x), by = "3 months"),
+               limits = function(x) c(min(x)- months(1), max(x) + months(1)),
+               expand = c(0.0, 0)) +
+  theme_minimal(base_family = "Corbel") +
+  labs(x= "Calendar Date", 
+       y= "Percentage Documentation", 
+       title= "Other signs examination ",
+       caption = "Each unique colour-coded point represents an individual hospital") +
+  theme(legend.position = "none")+
+  theme(plot.title = element_text(hjust = 0.5))
+
+```
+
+
+```{r echo=FALSE, warning=FALSE, message=FALSE, fig.pos='H', comment = NA}
+plot.treatment <- Validate_Scores %>%
+  dplyr::filter(!(Hospital %in% c("Bondo DH", "Karatina District Hospital"))) %>%
+  dplyr::filter(!(Admission.DateTime < as.Date("2018-01-01", formart = "%Y-%m-%d"))) %>%
+  dplyr::mutate(
+    Month.Year = lubridate::as_date(zoo::as.yearqtr(Admission.DateTime))
+  ) %>%
+  dplyr::group_by(Hospital, Month.Year) %>%
+  dplyr::summarise(
+    `Score` = sum( `First Line Antibiotics`, na.rm = T),
+    `Denominator` = sum(`Denom.First Line Antibiotics`, na.rm = T),
+    `Rate` = round(Score/Denominator,4)) %>%
+  dplyr::ungroup() 
+
+plot.treatment %>% ggplot() +
+  geom_point(aes(x = Month.Year, y = Rate, group = Hospital, color = Hospital)) +
+  ggsci::scale_color_d3(palette = "category20b") + 
+  geom_smooth(aes(x = Month.Year, y = Rate), data = plot.treatment, method = "loess", formula = 'y ~ x') +
+  scale_y_continuous(labels = scales::percent, breaks =seq(0,1,.2), limits =c(0,1)) +
+  scale_x_date(date_labels = "%b\n%Y",
+               breaks = function(x) seq.Date(from = min(x), to = max(x), by = "6 months"),
+               minor_breaks = function(x) seq.Date(from = min(x), to = max(x), by = "3 months"),
+               limits = function(x) c(min(x)- months(1), max(x) + months(1)),
+               expand = c(0.0, 0)) +
+  theme_minimal(base_family = "Corbel") +
+  labs(x= "Calendar Date", 
+       y= "Percentage Documentation", 
+       title= "Antibiotic prescriptions ",
+       caption = "Each unique colour-coded point represents an individual hospital") +
+  theme(legend.position = "none")+
+  theme(plot.title = element_text(hjust = 0.5))
+```
+
+
+```{r echo=FALSE, warning=FALSE, message=FALSE, fig.pos='H', comment = NA}
+plot.fluids <- Validate_Scores %>%
+  dplyr::filter(!(Hospital %in% c("Bondo DH", "Karatina District Hospital"))) %>%
+  dplyr::filter(!(Admission.DateTime < as.Date("2018-01-01", formart = "%Y-%m-%d"))) %>%
+  dplyr::mutate(
+    Month.Year = lubridate::as_date(zoo::as.yearqtr(Admission.DateTime))
+  ) %>%
+  dplyr::group_by(Hospital, Month.Year) %>%
+  dplyr::summarise(
+    `Score` = sum( `Fluids`, na.rm = T),
+    `Denominator` = sum(`Denom.Fluids`, na.rm = T),
+    `Rate` = round(Score/Denominator,4)
+    ) %>%
+  dplyr::ungroup() 
+
+plot.fluids %>% ggplot() +
+  geom_point(aes(x = Month.Year, y = Rate, group = Hospital, color = Hospital)) +
+  ggsci::scale_color_d3(palette = "category20b") + 
+  geom_smooth(aes(x = Month.Year, y = Rate), data =plot.fluids, method = "loess", formula = 'y ~ x') +
+  scale_y_continuous(labels = scales::percent, breaks =seq(0,1,.2), limits =c(0,1)) +
+  scale_x_date(date_labels = "%b\n%Y",
+               breaks = function(x) seq.Date(from = min(x), to = max(x), by = "6 months"),
+               minor_breaks = function(x) seq.Date(from = min(x), to = max(x), by = "3 months"),
+               limits = function(x) c(min(x)- months(1), max(x) + months(1)),
+               expand = c(0.0, 0)) +
+  theme_minimal(base_family = "Corbel") +
+  labs(x= "Calendar Date", 
+       y= "Percentage Documentation", 
+       title= "Fluids prescription ",
+       caption = "Each unique colour-coded point represents an individual hospital") +
+  theme(legend.position = "none")+
+  theme(plot.title = element_text(hjust = 0.5))
+
+
+```
+
+
+```{r echo=FALSE, warning=FALSE, message=FALSE, fig.pos='H', comment = NA}
+plot.feeds <- Validate_Scores %>%
+  dplyr::filter(!(Hospital %in% c("Bondo DH", "Karatina District Hospital"))) %>%
+  dplyr::filter(!(Admission.DateTime < as.Date("2018-01-01", formart = "%Y-%m-%d"))) %>%
+  dplyr::mutate(
+    Month.Year = lubridate::as_date(zoo::as.yearqtr(Admission.DateTime))
+  ) %>%
+  dplyr::group_by(Hospital, Month.Year) %>%
+  dplyr::summarise(
+    `Score` = sum( `Feeds`, na.rm = T),
+    `Denominator` = sum(`Denom.Feeds`, na.rm = T),
+    `Rate` = round(Score/Denominator,4)
+  ) %>%
+  dplyr::ungroup() 
+
+plot.feeds %>% ggplot() +
+  geom_point(aes(x = Month.Year, y = Rate, group = Hospital, color = Hospital)) +
+  ggsci::scale_color_d3(palette = "category20b") + 
+  geom_smooth(aes(x = Month.Year, y = Rate), data =plot.feeds, method = "loess", formula = 'y ~ x') +
+  scale_y_continuous(labels = scales::percent, breaks =seq(0,1,.2), limits =c(0,1)) +
+  scale_x_date(date_labels = "%b\n%Y",
+               breaks = function(x) seq.Date(from = min(x), to = max(x), by = "6 months"),
+               minor_breaks = function(x) seq.Date(from = min(x), to = max(x), by = "3 months"),
+               limits = function(x) c(min(x)- months(1), max(x) + months(1)),
+               expand = c(0.0, 0)) +
+  theme_minimal(base_family = "Corbel") +
+  labs(x= "Calendar Date", 
+       y= "Percentage Documentation", 
+       title= "Feeds prescription ",
+       caption = "Each unique colour-coded point represents an individual hospital") +
+  theme(legend.position = "none")+
+  theme(plot.title = element_text(hjust = 0.5))
+```
+
+
+```{r echo=FALSE, warning=FALSE, message=FALSE, fig.pos='H', comment = NA}
+plot.monitoring <- Validate_Scores %>%
+  dplyr::filter(!(Hospital %in% c("Bondo DH", "Karatina District Hospital"))) %>%
+  dplyr::filter(!(Admission.DateTime < as.Date("2018-01-01", formart = "%Y-%m-%d"))) %>%
+  dplyr::mutate(
+    Month.Year = lubridate::as_date(zoo::as.yearqtr(Admission.DateTime))
+  ) %>%
+  dplyr::group_by(Hospital, Month.Year) %>%
+  dplyr::summarise(
+    `Score` = sum( `Monitoring`, na.rm = T),
+    `Denominator` = sum(`Denom.Monitoring`, na.rm = T),
+    `Rate` = round(Score/Denominator,4)
+  ) %>%
+  dplyr::ungroup() 
+
+plot.monitoring %>% ggplot() +
+  geom_point(aes(x = Month.Year, y = Rate, group = Hospital, color = Hospital)) +
+  ggsci::scale_color_d3(palette = "category20b") + 
+  geom_smooth(aes(x = Month.Year, y = Rate), data =plot.monitoring, method = "loess", formula = 'y ~ x') +
+  scale_y_continuous(labels = scales::percent, breaks =seq(0,1,.2), limits =c(0,1)) +
+  scale_x_date(date_labels = "%b\n%Y",
+               breaks = function(x) seq.Date(from = min(x), to = max(x), by = "6 months"),
+               minor_breaks = function(x) seq.Date(from = min(x), to = max(x), by = "3 months"),
+               limits = function(x) c(min(x)- months(1), max(x) + months(1)),
+               expand = c(0.0, 0)) +
+  theme_minimal(base_family = "Corbel") +
+  labs(x= "Calendar Date", 
+       y= "Percentage Documentation", 
+       title= "Monitoring ",
+       caption = "Each unique colour-coded point represents an individual hospital") +
+  theme(legend.position = "none")+
+  theme(plot.title = element_text(hjust = 0.5))
+```
+
+
+```{r echo=FALSE, warning=FALSE, message=FALSE, fig.pos='H', comment = NA}
+plot.supportive.care <- Validate_Scores %>%
+  dplyr::filter(!(Hospital %in% c("Bondo DH", "Karatina District Hospital"))) %>%
+  dplyr::filter(!(Admission.DateTime < as.Date("2018-01-01", formart = "%Y-%m-%d"))) %>%
+  dplyr::mutate(
+    Month.Year = lubridate::as_date(zoo::as.yearqtr(Admission.DateTime))
+  ) %>%
+  dplyr::group_by(Hospital, Month.Year) %>%
+  dplyr::summarise(
+    `Score` = sum( `Supportive Care`, na.rm = T),
+    `Denominator` = sum(`Denom.Supportive Care`, na.rm = T),
+    `Rate` = round(Score/Denominator,4)
+  ) %>%
+  dplyr::ungroup() 
+
+plot.supportive.care %>% ggplot() +
+  geom_point(aes(x = Month.Year, y = Rate, group = Hospital, color = Hospital)) +
+  ggsci::scale_color_d3(palette = "category20b") + 
+  geom_smooth(aes(x = Month.Year, y = Rate), data =plot.supportive.care, method = "loess", formula = 'y ~ x') +
+  scale_y_continuous(labels = scales::percent, breaks =seq(0,1,.2), limits =c(0,1)) +
+  scale_x_date(date_labels = "%b\n%Y",
+               breaks = function(x) seq.Date(from = min(x), to = max(x), by = "6 months"),
+               minor_breaks = function(x) seq.Date(from = min(x), to = max(x), by = "3 months"),
+               limits = function(x) c(min(x)- months(1), max(x) + months(1)),
+               expand = c(0.0, 0)) +
+  theme_minimal(base_family = "Corbel") +
+  labs(x= "Calendar Date", 
+       y= "Percentage Documentation", 
+       title= "Supportive Care",
+       caption = "Each unique colour-coded point represents an individual hospital") +
+  theme(legend.position = "none")+
+  theme(plot.title = element_text(hjust = 0.5))
+
+
+```
+
+
+

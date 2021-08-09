@@ -1,0 +1,205 @@
+## Quality of Care: Fluids prescription error rates
+
+### Flow-chart data
+```{r echo=FALSE, message=FALSE, warning=FALSE, comment = NA}
+
+Dataset <- data.table(read_csv("analysis.csv",guess_max = 80000, 
+                               col_types = cols()))
+Dataset[ , key := .I]
+setkey(Dataset,key)
+
+Dataset %<>% dplyr::filter(!(Hospital %in% c("Bondo DH", 
+                                             "Karatina District Hospital",
+                                             "Naivasha Level 5 Hospital")))
+
+rows.full <- nrow(Dataset)
+
+cat(paste0("Number of all observations in the dataset: ", rows.full))
+
+Dataset %<>%
+  filter(MinimumDataset == F)
+
+rows.after.exclude.one <- nrow(Dataset)
+
+cat(paste0("\n\nObservations with full dataset collection: ", rows.after.exclude.one))
+
+Dataset %<>%
+  filter(Admission_Date < Sys.Date()) %>%
+  filter(Admission_Date > as.Date("31-03-2014",format = "%d-%m-%Y"))
+
+rows.after.exclude.two <- nrow(Dataset)
+
+cat(paste0("\n\nObservations captured admissions between: 01 April 2014 and ", 
+format(max(Dataset$Admission_Date), "%d %B, %Y"),": ", rows.after.exclude.two))
+
+
+Dataset %<>%
+  dplyr::filter(!is.na(Fluids.Prescribed) & Fluids.Prescribed == T)
+
+rows.after.exclude.three <- nrow(Dataset)
+
+cat(paste0("\n\nObservations with Fluids Prescription: ", rows.after.exclude.three))
+
+
+Dataset %<>%
+  dplyr::filter(!is.na(Fluids.Dose))
+
+rows.after.exclude.four <- nrow(Dataset)
+
+cat(paste0("\n\nObservations with Fluids Prescription fully documented: ", 
+           rows.after.exclude.four))
+
+
+
+Analysis.Dataset <- Dataset %>%
+  dplyr::select(
+    Hospital,
+    Admission_Date,
+    Male,
+    Birth.Weight,
+    Weight.Group,
+    Apgar.Score.5min,
+    Gestational.Age,
+    Gestational.Group,
+    LOS,
+    LOS.Group,
+    Outcome,
+    
+    # Gentamicin
+    Fluids.Prescribed,
+    Fluids.Dose,
+    
+    #Diagnoses
+    contains("Admit.Diagnose.")
+  ) %>%
+  as.data.table()
+
+```
+
+
+```{r echo=FALSE, message=FALSE, warning=FALSE, fig.pos='H', fig.height=10, fig.width=7}
+
+DosingTable <- Analysis.Dataset %>%
+  dplyr::select(Hospital, Admission_Date, Fluids.Dose) %>%
+  mutate(CalendarDate = as_date(as.yearmon(Admission_Date))) %>%
+  group_by(Hospital, CalendarDate) %>%
+  dplyr::summarise(Under = sum(Fluids.Dose=="Under",na.rm = T),
+                   Over = sum(Fluids.Dose=="Over",na.rm = T),
+                   Correct = sum(Fluids.Dose=="Correct",na.rm = T),
+                   `Over + Under` = (Over + Under),
+                   Denominator = n(),
+                   Error =  ((Over + Under)/Denominator),
+                   Overdose =  (Over/Denominator),
+                   Underdose =  (Under/Denominator)
+        
+  ) %>%
+  mutate(Year = strftime(as.Date(CalendarDate,format="%Y-%m-%d"), 
+                         format = "%Y"),
+         Counter = 1) %>%
+  group_by(Hospital) %>%
+  mutate(Time = order_by(CalendarDate,cumsum(Counter))) %>%
+  group_by(Hospital) %>%
+  mutate(Time = Time - max(Time),
+         Medication = "Fluids") %>%
+  as.data.table()
+
+for(i in c(1:2)){
+
+ graph.plot <- DosingTable %>%
+   dplyr::filter(Time > -24) %>%
+    dplyr::select(Hospital, CalendarDate, 
+                  Error, 
+                  Overdose, 
+                  Underdose) %>%
+    pivot_longer(-c(Hospital,CalendarDate), names_to = "Error", values_to = "Rate") %>%
+    ggplot(aes(x = CalendarDate, y = Rate, group = Error, colour=Error)) +
+    scale_colour_d3() +
+    geom_line() + geom_point() +
+    facet_wrap_paginate(Hospital~., ncol=3, nrow = 4, 
+                        labeller = label_wrap_gen(), page = i) +
+    scale_y_continuous(labels = scales::percent, breaks =seq(0,1,0.2)) +
+   scale_x_date(date_labels = "%b\n%Y",
+               breaks = function(x) seq.Date(from = min(x), to = max(x), by = "6 months"),
+               minor_breaks = function(x) seq.Date(from = min(x), to = max(x), by = "3 months"),
+               limits = function(x) c(min(x)- months(1), max(x) + months(1)),
+               expand = c(0.0, 0)) +
+    theme_minimal(base_family = "Corbel") +
+    theme(legend.position = "bottom",
+          strip.background = element_rect(fill="black"),
+          strip.text = element_text(colour = 'white', size = 11, face = "bold"),
+          legend.title = element_text(size = 12),
+          legend.text = element_text(size = 10)) +
+    labs(x = "Time (in months)", 
+         caption="Denominator = all patients with well-documented fluids prescription", 
+         title="Hospital-specific fluids prescription error rate",
+         subtitle = "Time calculated as sequential months") 
+ 
+ print(graph.plot)
+}
+
+
+```
+
+
+```{r echo=FALSE, message=FALSE, warning=FALSE, fig.pos='H'}
+
+LatestHospitalData <-  DosingTable %>%
+  dplyr::filter(CalendarDate != as.Date("2020-12-01", format="%Y-%m-%d")) %>%
+  group_by(Hospital) %>%
+  mutate(Counter = 1,
+         Time = order_by(CalendarDate,cumsum(Counter))) %>%
+  dplyr::slice(tail(Time, 25)) %>%
+  filter(Time < max(Time)) %>%
+  mutate(Intervention.Time = Time - max(Time)) %>% #Strike affected most hospitals (Dec 2020)
+  as.data.table()
+
+
+BaselineRateMedian <- LatestHospitalData %>%
+  dplyr::select(
+    CalendarDate,
+    Medication,
+    Intervention.Time,
+    Hospital,
+    Error,
+    `Over + Under`,
+    Denominator
+  ) %>%
+  dplyr::rename(
+    Affected = `Over + Under`
+  ) %>%
+  mutate(Hospital = as.integer(as.factor(Hospital))) %>%  
+  ungroup() %>%
+  group_by(Medication, Intervention.Time) %>%
+  dplyr::summarise(
+    `Error Made` = sum(Affected),
+    `Patients` = sum(Denominator),
+    `Rate` = median(Error),
+    `Upper Limit` = quantile(Error)[4], #mean(y) + (1.96*sciplot::se(y))
+    `Lower Limit` = quantile(Error)[2], #mean(y) - (1.96*sciplot::se(y))
+    Affected = median(Affected),
+    `Denominator` = median(Denominator)
+  ) 
+
+BaselineRateMedian %>%
+  dplyr::mutate(Intervention.Time = Intervention.Time + 24) %>%
+  ggplot(aes(y = Rate, x = Intervention.Time, group = Medication, 
+             color = Medication)) +
+  geom_point(size=4) +
+  geom_line(size=1.05, alpha=0.7, fill="blue") +
+  geom_ribbon(aes(ymin=`Lower Limit`, ymax=`Upper Limit`,fill = Medication),
+            alpha=0.3) +
+  scale_fill_d3() +
+  scale_color_d3() + 
+  scale_x_continuous(breaks=seq(0,24,3), limits=c(1,24)) + 
+  scale_y_continuous(labels = scales::percent, 
+                     breaks =seq(-0.0,.7,0.1), limits =c(-0.0,.7)) +
+  labs(x = "Time in CIN in months", y="% patients with prescription error",
+       title="Fluids prescription error over time",
+       caption = "Summary rate as median (IQR) \nDecember 2020 omitted due to strike") +
+  theme_minimal(base_family = "Corbel") +
+  theme(legend.position = "none",
+        plot.caption = element_text(color = "#2F4F4F", face = "italic",
+                                    family = "Candara"))
+
+```
+
