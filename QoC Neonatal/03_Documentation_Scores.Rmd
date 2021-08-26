@@ -1,3 +1,8 @@
+---
+output:
+  pdf_document: default
+  html_document: default
+---
 
 ```{r echo=FALSE, warning=FALSE, message=FALSE, fig.pos='H', comment = NA}
 library(zoo)
@@ -396,7 +401,7 @@ if(!file.exists("Documentation_Score.rds")){
     )
   
   
-  Complaints_cardinal <- Dataset %>%
+  Complaints <- Dataset %>%
     dplyr::select(
       key,
       # Complaints and cardinal
@@ -573,7 +578,7 @@ if(!file.exists("Documentation_Score.rds")){
     merge(.,Discharge, by = "key") %>%
     merge(.,Maternal, by = "key") %>%
     merge(.,Complaints, by = "key") %>%
-    merge(.,Signs, by = "key") %>%
+    
     merge(.,Other, by = "key") %>%
     merge(.,Antibiotics, by = "key") %>%
     merge(.,Fluids, by = "key") %>%
@@ -704,12 +709,11 @@ plot.Demographics %>% ggplot() +
        caption = "Each unique colour-coded point represents an individual hospital") +
   theme(legend.position = "none")+
   theme(plot.title = element_text(hjust = 0.5))
-  demog<-Validate_Scores%>%dplyr::select(Male,
-                                Age,
-                               Gestational.Age,
-                               Birth.Weight)
- names(demog) <- gsub(".", "  ", names(demog), fixed = TRUE)
- knitr::kable(names(demog),"simple",caption="Variables included")
+  demog<-c("Male",
+                                "Age",
+                               "Gestational Age",
+                               "Birth Weight")
+  knitr::kable(demog,"simple",caption="Variables included")
 
 
 ```
@@ -832,14 +836,14 @@ plot.Maternal.history %>% ggplot() +
   theme(legend.position = "none")+
   theme(plot.title = element_text(hjust = 0.5))
   
-  maternal.list<-Validate_Scores%>%select( Maternal.Age,
-      Maternal.HIV,
-      Maternal.VRDL,
-      Maternal.Gravidity,
-      Maternal.Parity,
-      Gestational.Size)
- names(discharge.list) <- gsub(".", "  ", names(maternal.list), fixed = TRUE)
- knitr::kable(names(maternal.list),"simple",caption="Variables included")
+  maternal.list<-c( "Maternal Age",
+      "Maternal HIV",
+      "Maternal VRDL",
+      "Maternal Gravidity",
+     " Maternal Parity",
+      "Gestational Size")
+
+ knitr::kable(maternal.list,"simple",caption="Variables included")
 
 ```
 
@@ -874,25 +878,25 @@ plot.presenting.complains %>% ggplot() +
        caption = "Each unique colour-coded point represents an individual hospital") +
   theme(legend.position = "none")+
   theme(plot.title = element_text(hjust = 0.5))
-  complaints.cardinal.list<-Validate_Scores%>%select(Temparature,
-      Fever,
-      Convulsions,
-      Difficulty.Breathing,
-      Difficulty.Feeding,
-      Vomiting,
-      Apnoea,
-      Grunting,
-      Central.Cyanosis,
-      Bulging.Fontanelle,
-      Floppy)
-  names(complaints.cardinal.list) <- gsub(".", "  ", names(complaints.cardinal.list), fixed = TRUE)
- knitr::kable(names(complaints.cardinal.list),"simple",caption="Variables included")
+  complaints.cardinal.list<-c("Temparature",
+      "Fever",
+     " Convulsions",
+      "Difficulty Breathing",
+      "Difficulty Feeding",
+     " Vomiting",
+      "Apnoea",
+      "Grunting",
+      "Central Cyanosis",
+     " Bulging Fontanelle",
+      "Floppy")
+   knitr::kable(complaints.cardinal.list,"simple",caption="Variables included")
 
-#```
+```
 
 
-#
-#```{r echo=FALSE, warning=FALSE, message=FALSE, fig.pos='H', comment = #NA}
+
+
+```{r echo=FALSE, warning=FALSE, message=FALSE, fig.pos='H', comment = NA}
 plot.other.signs <- Validate_Scores %>%
   dplyr::filter(!(Hospital %in% c("Bondo DH", "Karatina District Hospital"))) %>%
   dplyr::filter(!(Admission.DateTime < as.Date("2018-01-01", formart = "%Y-%m-%d"))) %>%
@@ -922,26 +926,25 @@ plot.other.signs %>% ggplot() +
        caption = "Each unique colour-coded point represents an individual hospital") +
   theme(legend.position = "none")+
   theme(plot.title = element_text(hjust = 0.5))
-other.signs.list<-Validate_Scores%>%select(Can.Suck.Breastfeed,
-      Bilateral.Air.Entry,
-      Crackles,
-      Indrawing,
-      Capillary.Refill,
-      Pallor.Anaemia,
-      Eye.Pus.Infection,
-      Umbilical.Infection,
-      Skin.Rushes,
-      Irritable,
-      Jaundice,
-      Glucose.Ordered)
-  names(other.signs.list) <- gsub(".", "  ", names(other.signs.list), fixed = TRUE)
- knitr::kable(names(other.signs.list),"simple",caption="Variables included")
+other.signs.list<-c("Can Suck or Breastfeed",
+      "Bilateral Air Entry",
+      "Crackles",
+      "Indrawing",
+      "Capillary Refill",
+      "Pallor Anaemia",
+      "Eye Pus Infection",
+      "Umbilical Infection",
+      "Skin Rushes",
+      "Irritable",
+      "Jaundice",
+      "Glucose Test Ordered")
+   knitr::kable(other.signs.list,"simple",caption="Variables included")
 
       
-#```
+```
 
 
-#```{r echo=FALSE, warning=FALSE, message=FALSE, fig.pos='H', comment = #NA}
+```{r echo=FALSE, warning=FALSE, message=FALSE, fig.pos='H', comment = NA}
 plot.treatment <- Validate_Scores %>%
   dplyr::filter(!(Hospital %in% c("Bondo DH", "Karatina District Hospital"))) %>%
   dplyr::filter(!(Admission.DateTime < as.Date("2018-01-01", formart = "%Y-%m-%d"))) %>%
@@ -979,6 +982,15 @@ treatment.list<-c( "Age",
       "Route of Adminstration")
   knitr::kable(treatment.list,"simple",caption="Variables included")
 ```
+#Dosage was calculated using the formula Dosage = dose prescribed/weight
+#Penicilin Under dose -  a prescription of less than 40,000iu/kg
+#Penicillin Overdose - a prescription >60,000 iu/kg 
+#Penicillin Correct dose -  a prescription >=40000 & <=60000 iu/kg
+
+#Gentamicin Underdose - a prescription <2.4mg/kg for weight below 2kg or <4mg/kg for weight >=2kg.
+#Gentamicin Overdose - a prescription >3.6mg/kg for weight below 2kg or <6mg/kg for weight >=2kg.
+
+
 
 
 ```{r echo=FALSE, warning=FALSE, message=FALSE, fig.pos='H', comment = NA}
