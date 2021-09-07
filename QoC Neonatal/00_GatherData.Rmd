@@ -1,0 +1,323 @@
+---
+title: "CIN-Neonatal Data Gathering"
+author: "Timothy Tuti"
+date: '`r format(Sys.time(), "%d %B, %Y")`'
+output:
+  pdf_document:
+    latex_engine: xelatex
+    dev: cairo_pdf
+  html_document:
+    df_print: paged
+monofont: Lato Light
+sansfont: Lato Light
+always_allow_html: yes
+mainfont: Lato Light
+header-includes:
+    - \usepackage{setspace}\doublespacing
+    - \usepackage{float}
+spacing: double
+---
+# CIN-Neonatal Data Gathering
+## Neonatal data from Pumwani REDcap tool
+
+```{r warning=F, message=F}
+library(magrittr)
+library(data.table)
+
+database_values <- read.csv("database_values.csv", header = T)
+
+api_url <- database_values$Value[database_values$Object == "URL"]
+token.neonatal <- database_values$Value[database_values$Object == "token.neonatal"]
+token.pumwani <- database_values$Value[database_values$Object == "token.pumwani"]
+
+data <- RedcapData::redcap_project(api_url = api_url,
+                                   token = token.pumwani,
+                                   chunked = T,
+                                   chunksize = 5000,
+                                   local = FALSE,
+                                   parallel = T)
+data$load_data()
+data.pumwani <- data$get_formatted_data()
+
+```
+
+### Rename columns in dataset
+
+Allows for merging of rows between CIN-N REDCap projects
+
+```{r warning=F, message=F}
+renamePumwaniColumns = function(dataset){
+  # Rename variables to be similar to the standard neonatal tool
+  dataset %<>%
+    dplyr::rename(
+      c(
+        id = survey_id, 
+        random = randomized, 
+        ipno = patients_ipno,
+        date_discharge = date_of_discharge_death,
+        date_adm = admission_date, 
+        age_recorded = agedoc, 
+        age_days = age,
+        child_sex = gender, 
+        birth_wt = birth_weight, 
+        abnormalities____1 = abnormalities___7, 
+        eye_pus = pus_from_the_eyes,
+        other_adm_diag_not_listed = other_admission_diag_not_listed,
+        date_fluid_presc = fldte, 
+        fluid_feed_monitoring_chart = fluid_feed_monitoring_char,
+        feed_fluid_monitorng_chart = feed_fluid_monitoring_char,
+        intravenous_fluids_presc = intravenous_fluids_prescri,
+        total_vol_of_other_fluid = total_volume_of_other_flui, 
+        other_feeds = other_feed,
+        no_of_times_temp_monitored = number_of_times_temp_monit,
+        no_of_times_resp_monitored = number_of_times_respirator,
+        no_of_times_puls_monitored = number_of_times_pulse_rate,
+        freq_of_administration = frequency_of_administratio,
+        date_the_feeds_initiated = date_the_feeds_are_initiat,
+        start_date_phototherapy = date_of_phototherapy,
+        vital_signs_monitored___1 = vital_signs_monitored_f48___1,
+        vital_signs_monitored___2 = vital_signs_monitored_f48___2,
+        vital_signs_monitored___3 = vital_signs_monitored_f48___3,
+        vital_signs_monitored___4 = vital_signs_monitored_f48___4,
+        fluid_monitoring_chart = fld_cht,
+        disch_death_summ = dth_sum, 
+        outcome = otcme, 
+        dsc_condition = condition_on_discharge, 
+        referred_where = refereed_where,
+        follow_up = follow_up_care,
+        dsc_dx1_primary = ddgnsis, 
+        other_discharge_diag = any_other_disch_diag,
+        other_discharge_diag_1 = other_disch_diag_1,
+        other_discharge_diag_2 = other_disch_diag_2,
+        other_discharge_diag_3 = other_disch_diag_3,
+        other_discharge_diag_4 = other_disch_diag_4,
+        other_discharge_diag_5 = other_disch_diag_5,
+        any_other_disch_diag = other_disch_diag_not_listed,
+        other_disch_diag_old = disch_diag_not_listed,
+        other_discharge_diag_unlisted = other_discharge_diagnosis
+        )
+    )
+  return (dataset)
+}
+
+data.pumwani <- renamePumwaniColumns(data.pumwani) 
+
+
+data.pumwani %<>%
+  dplyr::mutate(Pumwani.Record = ifelse(stringr::str_detect(as.character(id), "^72"),T,F)) %>%
+  dplyr::mutate(Pumwani.Record = ifelse(!is.na(hosp_id), 
+                                          ifelse(!Pumwani.Record, 
+                                                 ifelse(hosp_id == "Pumwani Maternity Hospital", T, F),
+                                                 Pumwani.Record), NA)) %>%
+  dplyr::mutate(hosp_id = ifelse(!is.na(Pumwani.Record),
+                                 ifelse(Pumwani.Record == T, "Pumwani Maternity Hospital",  as.character(hosp_id)),
+                                 NA)) %>%
+  dplyr::select(-Pumwani.Record)
+
+```
+
+
+## Data from standard neonatal tool
+
+```{r warning=FALSE, message=FALSE}
+
+# Read neonatal data
+other.data <- RedcapData::redcap_project(api_url = api_url,
+                                         token = token.neonatal,
+                                         chunked = T,
+                                         chunksize = 5000,
+                                         local = FALSE,
+                                         parallel = T
+)
+other.data$load_data()
+data.neo <- other.data$get_formatted_data()
+data.neo <- as.data.table(data.neo)
+
+```
+
+
+## Convert data types to the same format on both datasets
+
+```{r warning=FALSE, message=FALSE}
+
+# Wrangle data types
+changeVariableTypes = function(dataset){
+  
+  # dates
+  dateVars <- as.character(grep('date', names(dataset), v = T))
+  for(i in dateVars){
+    dataset[[i]] = as.Date(dataset[[i]], "%Y-%m-%d")
+  }
+  #weight monitored
+  weightVars <- as.character(grep('^weight_', names(dataset), v = T))
+  weightVars <- weightVars[!grepl("_doc$|_units$|_complete$",weightVars)]
+  
+  for(i in weightVars){
+   dataset[[i]] = as.numeric(dataset[[i]])
+  }
+  
+  dataset$feed_volume <- stringr::str_trim(gsub("mls", "", dataset$feed_volume))
+  
+  dataset %<>% dplyr::mutate(
+    id = as.integer(id), 
+    hosp_id = as.character(hosp_id), 
+    is_minimum = as.integer(is_minimum), 
+    referred_from_which_facili = as.character(referred_from_which_facili),
+    infant_drugs = as.character(infant_drugs),
+    bilirubin_d=as.character(bilirubin_d),
+    other_admission_diag_4 = as.character(other_admission_diag_4),
+    other_admission_diag_5 = as.character(other_admission_diag_5),
+    fever_duration = as.numeric(fever_duration),
+    cefta_dur = as.numeric(cefta_dur),
+    time_of_admission_document=as.character(time_of_admission_document),
+    infant_drugs = as.character(infant_drugs),
+    pen_dur = as.numeric(pen_dur),
+    amp_dose = as.numeric(amp_dose),
+    ceftr_dur= as.numeric(ceftr_dur),
+    duration_amikacin = as.integer(duration_amikacin),
+    cefta_dose = as.numeric(cefta_dose),
+    total_volume_of_iv_fluids = as.numeric(total_volume_of_iv_fluids),
+    duration_of_iv_fluid_presc = as.numeric(duration_of_iv_fluid_presc), #problem
+    duration_prescribed=as.numeric(duration_prescribed),
+    specify_other_fluid_2_pres = as.character(specify_other_fluid_2_pres),
+    feed_volume=as.numeric(feed_volume),
+    other_discharge_diag_3 = as.character(other_discharge_diag_3),
+    other_discharge_diag_4 = as.character(other_discharge_diag_4),
+    other_discharge_diag_5 = as.character(other_discharge_diag_5),
+    other_disch_diag_old = as.character(other_disch_diag_old),
+    bilirubin_t = as.numeric(bilirubin_t) #Problem
+  )
+  
+  return(dataset)
+}
+
+# is_minimum has text in some values
+data.neo$is_minimum [ data.neo$is_minimum == "no"] <- "0"
+data.neo$is_minimum <- as.integer(data.neo$is_minimum)
+
+# duration_of_iv_fluid_presc has text in some values
+data.neo %<>%
+  dplyr::mutate(
+    duration_of_iv_fluid_presc = stringr::str_replace(duration_of_iv_fluid_presc, "[:alpha:]+", ""),
+    duration_of_iv_fluid_presc = stringr::str_replace(duration_of_iv_fluid_presc, "[:space:]+", ""),
+    duration_of_iv_fluid_presc = stringr::str_replace(duration_of_iv_fluid_presc, "[:alpha:]+", ""),
+    duration_of_iv_fluid_presc = gsub( "<+FFFC>", "",duration_of_iv_fluid_presc,fixed = T)
+  )
+
+data.neo <- changeVariableTypes(data.neo)
+
+
+# the following variables have text in some values
+data.pumwani %<>%
+   dplyr::mutate(
+    total_volume_of_iv_fluids = stringr::str_replace(total_volume_of_iv_fluids, "[:alpha:]+", ""),
+    duration_of_iv_fluid_presc = stringr::str_replace(duration_of_iv_fluid_presc, "[:alpha:]+", "")
+  )
+
+
+data.pumwani <- changeVariableTypes(data.pumwani)
+```
+
+## Combine datasets
+```{r warning=FALSE, message=FALSE}
+
+# Factors with varying levels are problematic
+convertFactorToChar <- function(column){
+  if(is.factor(column)){
+    column <- as.character(column)
+  }
+  if(is.character(column)){
+    column[column == "Empty"] <- NA
+    column[column == "empty"] <- NA
+  }
+  return(column)
+}
+data.neo <- data.neo[,lapply(.SD, convertFactorToChar)]
+data.pumwani <- as.data.table(data.pumwani)
+data.pumwani  <- data.pumwani[,lapply(.SD, convertFactorToChar)]
+
+data.combined <-  dplyr::bind_rows(data.pumwani, data.neo) %>% 
+  subset(., select = -c(
+    ipno,
+    biodata_complete, 
+    babys_history_complete, 
+    maternal_history_complete,
+    examination_complete, 
+    weight_monitoring_complete,
+    investigations_complete, 
+    babys_admission_diagnoses_complete,
+    babys_daily_case_notes_complete, 
+    drug_treatment_complete, 
+    supportive_care_complete,
+    follow_up_monitoring_complete, 
+    discharge_information_complete,
+    post_discharge_weights_complete,
+    residence_location_sub_loc, 
+    residence_district,
+    in_gis_avail_ke, 
+    in_gis_doc_ke___1, 
+    in_gis_doc_ke___2,
+    in_gis_doc_ke___3, 
+    in_gis_doc_ke___4, 
+    in_gis_doc_ke___5,
+    in_gis_doc_ke___6, 
+    in_gis_doc_ke___7, 
+    in_gis_subc, 
+    in_gis_ward,
+    in_gis_loc, 
+    in_gis_subloc, 
+    in_gis_school, 
+    in_gis_hosp,
+    in_gis_add, 
+    ismdrugs, 
+    maternal_drugs___1, 
+    maternal_drugs___2,
+    maternal_drugs___3, 
+    maternal_drugs___4, 
+    maternal_drugs___5, 
+    maternal_drugs___6, 
+    maternal_drugs___7, 
+    maternal_drugs___8, 
+    maternal_drugs___9, 
+    maternal_drugs___10, 
+    maternal_drugs___11, 
+    maternal_drugs___12, 
+    maternal_drugs___13, 
+    maternal_drugs___14, 
+    maternal_drugs___15, 
+    maternal_drugs___16, 
+    maternal_drugs___17,
+    maternal_cdns___1, 
+    maternal_cdns___2, 
+    maternal_cdns___3, 
+    maternal_cdns___4, 
+    maternal_cdns___5,
+    maternal_cdns___6, 
+    maternal_cdns___7, 
+    maternal_cdns___8, 
+    maternal_cdns___9, 
+    othrmatcdn,
+    cpap_prescriber,
+    cpap_ad_events___1, 
+    cpap_ad_events___2, 
+    cpap_ad_events___3, 
+    cpap_ad_events___4, 
+    cpap_ad_events___5, 
+    cpap_ad_events___6, 
+    cpap_ad_events___7, 
+    cpap_ad_events___8, 
+    cpap_ad_events___9, 
+    cpap_ad_events____1,
+    cpap_ad_events_other
+    )
+  ) %>%
+  as.data.table()
+
+data.combined[data.combined == -1] <- NA
+
+
+write.csv(data.combined, "CIN_N_Dataset.csv", row.names = FALSE)
+
+```
+
+### **Up next: Data cleaning**

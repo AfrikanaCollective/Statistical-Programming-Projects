@@ -1,0 +1,16 @@
+*.Rhistory
+*.RData
+*.rda
+*.rda
+*.docx
+*.pickle
+*.json
+*.rds
+*.pdf
+twitter.txt
+firebaseConfig.txt
+life-firebase-adminsdk.json
+Spark/checkpoint
+srl.txt
+cfa_srl.txt
+fort.16
