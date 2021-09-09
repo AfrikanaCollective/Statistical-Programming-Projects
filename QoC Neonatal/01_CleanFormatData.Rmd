@@ -1,0 +1,1727 @@
+---
+title: "CIN-Neonatal Data Munging"
+author: "Timothy Tuti"
+date: '`r format(Sys.time(), "%d %B, %Y")`'
+output:
+  pdf_document:
+    latex_engine: xelatex
+    dev: cairo_pdf
+  html_document:
+    df_print: paged
+monofont: Lato Light
+sansfont: Lato Light
+always_allow_html: yes
+mainfont: Lato Light
+header-includes:
+    - \usepackage{setspace}\doublespacing
+    - \usepackage{float}
+spacing: double
+---
+
+# CIN-N Analysis Dataset Preparation
+## Tag minimum dataset
+```{r warning=F, message=F}
+
+Dataset <- data.table(read_csv("CIN_N_Dataset.csv",guess_max = 80000))
+Dataset[ , key := .I]
+setkey(Dataset,key)
+
+Dataset[ ,MinimumDataset := F]
+Dataset[(
+          (!is.na(random) & random == "Yes") | 
+          (!is.na(leave_period) & leave_period == "Yes") | 
+          (!is.na(is_minimum) & is_minimum == 1)
+        ), MinimumDataset := T, by = key]
+
+# Drop columns captured in the composite column MinimumDataset
+set(Dataset, , c("random","leave_period", "is_minimum"), NULL) 
+
+load("01_a_NETS_Derive_id.rda")
+load("01_b_SENSS_Derive_id.rda")
+load("01_c_SENSS_Valid_id.rda")
+
+Prognostic_IDs_Derive = unique(c(NETS_derivation_ids, SENSS_ids))
+
+Dataset[,SENSS_NETS_Derivation := ifelse(id %in% Prognostic_IDs_Derive, T, F)]
+Dataset[,SENSS_NETS_Validation := ifelse(id %in% SENSS_valid_ids, T, F)]
+
+Dataset[SENSS_NETS_Derivation | SENSS_NETS_Validation,
+        hosp_id := "Pumwani Maternity Hospital"]
+
+rm(NETS_derivation_ids,SENSS_ids, SENSS_valid_ids, Prognostic_IDs_Derive)
+
+Dataset[, key := .I]
+setkey(Dataset, key)
+
+Dataset[, After_SENSS_NETS_Drop:=T]
+
+Dataset[!is.na(hosp_id) &
+          ((hosp_id %in% c("Pumwani Maternity Hospital", #1
+                          "Mama Lucy Kibaki Hospital", #53
+                          "Mbagathi County Hospital", #54
+                          "Kerugoya County Referral Hospital", #55
+                          "Nyeri County Referral Hospital", #58
+                          "Kisumu County Hospital", #62
+                          "Kakamega County General Teaching and Referral Hospital", #63
+                          "Vihiga County Referral Hospital", #64
+                          "Busia County Referral Hospital", #66
+                          "Kitale County Referral Hospital", #68
+                          "Embu Level 5 Teaching and Referral Hospital", #71
+                          "World Friends/Ruaraka Neema Hospital" #80
+                       ) & as.Date(date_adm) >= as.Date("2018-04-01")) |
+          (hosp_id %in% c("Nakuru Level 5 Hospital", #40
+                          "Thika Level 5 Hospital", #41
+                          "Homabay County Referral Hospital", #43
+                          "Jaramogi Oginga Odinga Teaching and Referral Hospital", #44
+                          "Naivasha Level 5 Hospital", #45
+                          "Kiambu Level 5 Hospital", #51
+                          "Machakos Level 5 Hospital", #52
+                          "Bungoma County Referral Hospital", #76,
+                          "Migori County Hospital" #81
+                          ) & as.Date(date_adm) >= as.Date("2018-12-01"))
+          ), After_SENSS_NETS_Drop := F]
+
+```
+
+
+
+### Recode Pumwani hospital original diagnoses
+
+```{r warning=FALSE, message=FALSE}
+
+factor_recodes_diagnoses <- c(
+  "BA" = "adm_diag___1",
+  "MAS" = "adm_diag___2",
+  "LBW" = "adm_diag___3",
+  "Twin" = "adm_diag___4",
+  "Respiratory Distress Syndrome" = "adm_diag___5",
+  "Jaundice" = "adm_diag___6",
+  "Neonatal Sepsis" = "adm_diag___7",
+  "Meningitis" = "adm_diag___8", 
+  "C/S delivery" = "adm_diag___9",
+  "Macrosomia" = "adm_diag___10"
+)
+
+factor_recodes_discharge_diagnoses <- c(
+  "BA" = "no_clear_primary_discharge_diagnosis___1",
+  "MAS" = "no_clear_primary_discharge_diagnosis___2",
+  "LBW" = "no_clear_primary_discharge_diagnosis___3",
+  "Twin" = "no_clear_primary_discharge_diagnosis___4",
+  "Respiratory Distress Syndrome" = "no_clear_primary_discharge_diagnosis___5",
+  "Jaundice" = "no_clear_primary_discharge_diagnosis___6",
+  "Neonatal Sepsis" = "no_clear_primary_discharge_diagnosis___7",
+  "Meningitis" = "no_clear_primary_discharge_diagnosis___8"
+)
+
+Pumwani.Old.Diagnoses <- Dataset[,copy(.SD),
+                                 .SDcols =c(paste0("adm_diag___",c(1:10)),"key")]
+
+Pumwani.Old.Discharge.Diagnoses <- 
+  Dataset[,copy(.SD),.SDcols =c(paste0("no_clear_primary_discharge_diagnosis___",
+                                       c(1:8)),
+                                       "key")]
+
+
+### Recode Pumwani Discharges
+recodePumwaniDischargeDiagnoses <- function(row.data){
+  diagnosis <- apply(row.data, 2, function(cell.value){
+    cell.results <- any(cell.value %in% c("Yes"))
+  })
+  diagnosis <- names(diagnosis[diagnosis==TRUE])
+  
+  if(is_empty(diagnosis)){
+    return(NA_character_)
+  }
+  suppressWarnings({
+    diagnosis %<>%
+      fct_recode(!!!factor_recodes_discharge_diagnoses) %>%
+      as.character()
+  })
+  diagnosis <- paste0(diagnosis, collapse = ";")
+  return(diagnosis)
+}
+
+Pumwani.Old.Discharge.Diagnoses[,Pumwani.Discharge.Diagnoses:= 
+                                  recodePumwaniDischargeDiagnoses(.SD),
+                                by=key]
+set(Pumwani.Old.Discharge.Diagnoses, , 
+    paste0("no_clear_primary_discharge_diagnosis___",c(1:8)), NULL) 
+
+
+# Re-code the values selected to admission diagnosis
+recodePumwaniDiagnoses <- function(row.data){
+  diagnosis <- apply(row.data, 2, function(cell.value){
+    cell.results <- any(cell.value %in% c("Yes"))
+  })
+  diagnosis <- names(diagnosis[diagnosis==TRUE])
+  
+  if(is_empty(diagnosis)){
+    return(NA_character_)
+  }
+  suppressWarnings({
+    diagnosis %<>%
+      fct_recode(!!!factor_recodes_diagnoses) %>%
+      as.character()
+  })
+  diagnosis <- paste0(diagnosis, collapse = ";")
+  return(diagnosis)
+}
+
+Pumwani.Old.Diagnoses[,Pumwani.Admit.Diagnoses:=recodePumwaniDiagnoses(.SD),
+                      by=key]
+set(Pumwani.Old.Diagnoses, , paste0("adm_diag___",c(1:10)), NULL) 
+
+Dataset %<>%
+  inner_join(.,Pumwani.Old.Diagnoses, by="key")%>%
+  as.data.table()
+
+Dataset %<>%
+  inner_join(.,Pumwani.Old.Discharge.Diagnoses, by="key")%>%
+  as.data.table()
+
+rm(Pumwani.Old.Diagnoses)
+rm(Pumwani.Old.Discharge.Diagnoses)
+
+getDiagnosesPumwaniTool <- function(diagnoses = NA){
+  if(is.na(diagnoses)){
+    return(NA_character_)
+  }
+  
+  diagnoses = tolower(diagnoses)
+  if(grepl('labour|prematu', diagnoses))
+    return("Low Birth Weight")
+  else if(grepl("sepsis|nns|eons", diagnoses))
+    return("Neonatal Sepsis")
+  else if(grepl("meconium|mas|aspiration", diagnoses))
+    return("Meconium Aspiration")
+  else if(grepl("distress|rds", diagnoses))
+    return("Respiratory Distress Syndrome")
+  else if(grepl("asphyxia|^sba$|^mba$|^ba$", diagnoses))
+    return("Birth Asphyxia")
+  else if(grepl("anomal|deform|congenital|ctev|chd", diagnoses))
+    return("Congenital Anomalies")
+  else if(grepl("jaundice|nnj", diagnoses))
+    return("Neonatal Jaundice")
+  else if(grepl("dehydration|depletion", diagnoses))
+    return("Dehydration")
+  else if(grepl("preterm|weight|lbw", diagnoses))
+    return("Low Birth Weight")
+  else if(grepl("macrosomia", diagnoses))
+    return("Macrosomia")
+  else if(grepl("twin", diagnoses))
+    return("Twin")
+  else if(grepl("meningitis", diagnoses))
+    return("Meningitis")
+  else
+    return("Other")
+}
+
+Dataset$clear.primary.diagnoses <- Dataset$pry_adm_diag %>%
+  gsub("\t|/|-", " ",.)
+
+# Clear primary diagnosis
+Dataset[,Clear.Diagnosis:=getDiagnosesPumwaniTool(clear.primary.diagnoses), by=key]
+
+# Other diagnosis
+Dataset[,Pumwani.Other.Diagnosis:=getDiagnosesPumwaniTool(specify_other_diag), by=key]
+Dataset[,Pumwani.Other.Diagnosis2:=other_diagnoses, by=key]
+Dataset %<>%
+  mutate(Pumwani.Other.Diagnosis2 = ifelse(!is.na(Pumwani.Other.Diagnosis2) & Pumwani.Other.Diagnosis2 !="Other", 
+                                           Pumwani.Other.Diagnosis2, NA))
+Dataset %<>%
+  mutate(Pumwani.Other.Diagnosis = ifelse(!is.na(Pumwani.Other.Diagnosis) & Pumwani.Other.Diagnosis !="Other", 
+                                           Pumwani.Other.Diagnosis, NA))
+
+Dataset.Copy <- Dataset[,copy(.SD)]
+
+
+Dataset.Copy[, c(paste0("adm_diag___",c(1:11)),
+                 paste0("no_clear_primary_discharge_diagnosis___",c(1:9)),
+                 "clear.primary.diagnoses",
+                 "other_diag1", 
+                 "other_diagnoses",
+                 "specify_other_diag") := NULL]
+
+Dataset <- Dataset.Copy[,copy(.SD)]
+
+Dataset %>%
+  dplyr::select(key, Pumwani.Admit.Diagnoses,
+                Clear.Diagnosis, Pumwani.Other.Diagnosis, Pumwani.Other.Diagnosis2) %>%
+  slice_head(n=5) %>%
+  kable(.,booktabs = T,
+      caption = "Sample Diagnoses from Pumwani Tool") %>%
+  kable_styling(bootstrap_options = c("striped", "hover"), 
+              latex_options = c("HOLD_position", "repeat_header", "striped"),
+              full_width = F, position = "center")
+```
+
+
+## Admission & Discharge diagnoses
+
+```{r echo=FALSE, warning=FALSE, message=FALSE}
+#####################################
+#
+#
+#Admission diagnoses: 
+#   Possible to insert all major admission diagnoses row-wise
+#   for each observation?
+#
+######################################
+
+cl <- parallel::makePSOCKcluster(5)
+
+get_diagnoses_standardised <- function(diagnoses = NA){
+  diagnosis.codes <- list(
+    "No Diagnosis" = F,
+    "Birth Asphyxia" = F,
+    "Meconium Aspiration" = F,
+    "Respiratory Distress Syndrome" = F,
+    "Neonatal Sepsis" = F,
+    "Dehydration" = F,
+    "Congenital Anomalies" = F,
+    "Neonatal Jaundice" = F,
+    "Low Birth Weight" = F,
+    "Meningitis" = F,
+    "Macrosomia" = F,
+    "Twin" =F,
+    "Other" = F
+  )
+
+  diagnoses <- diagnoses[diagnoses!=""]
+
+  if(rlang::is_empty(diagnoses)){
+    diagnosis.codes["No Diagnosis"] <- T
+  }else{
+    #browser()
+    diagnoses = tolower(unlist(strsplit(diagnoses, ";")))
+    if(any(grepl("sepsis|nns|eons", diagnoses)))
+      diagnosis.codes["Neonatal Sepsis"] = T
+    if(any(grepl("meconium|mas", diagnoses)))
+      diagnosis.codes["Meconium Aspiration"] = T
+    if(any(grepl("distress|rds", diagnoses)))
+      diagnosis.codes["Respiratory Distress Syndrome"] = T
+    if(any(grepl("asphyxia|^sba$|^mba$|^ba$", diagnoses)))
+      diagnosis.codes["Birth Asphyxia"] = T
+    if(any(grepl("anomal|deform|congenital|ctev|chd", diagnoses)))
+      diagnosis.codes["Congenital Anomalies"] = T
+    if(any(grepl("jaundice|nnj", diagnoses)))
+      diagnosis.codes["Neonatal Jaundice"] = T
+    if(any(grepl("dehydration|depletion", diagnoses)))
+      diagnosis.codes["Dehydration"] = T
+    if(any(grepl("preterm|weight|lbw|labour|prematu", diagnoses)))
+      diagnosis.codes["Low Birth Weight"] = T
+    if(any(grepl("macrosomia", diagnoses)))
+      diagnosis.codes["Macrosomia"] = T
+    if(any(grepl("twin", diagnoses)))
+      diagnosis.codes["Twin"] = T
+    if(any(grepl("meningitis", diagnoses)))
+      diagnosis.codes["Meningitis"] = T
+
+    # Must be second last in this block
+    # Known + Unknown
+    if(length(diagnoses) > sum(unlist(diagnosis.codes)))
+      diagnosis.codes["Other"] = T
+
+    # Must be last thing in this block
+    # Unknown only
+    if(!any(unlist(diagnosis.codes)))
+      diagnosis.codes["Other"] = T
+  }
+  return(diagnosis.codes)
+}
+
+Diagnosis.Data <- Dataset %>% 
+  dplyr::select(key, pry_adm_diag, adm_diag_1, adm_diag_2, adm_diag_3, 
+                other_admission_diag_1, other_admission_diag_2, 
+                other_admission_diag_3, other_admission_diag_4, 
+         other_admission_diag_5, admisn_diag_not_listed) %>%
+  mutate(pry_adm_diag =ifelse(!is.na(pry_adm_diag), pry_adm_diag, "__NA"),
+         adm_diag_1 =ifelse(!is.na(adm_diag_1), adm_diag_1, "__NA"),
+         adm_diag_2 =ifelse(!is.na(adm_diag_2), adm_diag_2, "__NA"),
+         adm_diag_3 =ifelse(!is.na(adm_diag_3), adm_diag_3, "__NA"),
+         other_admission_diag_1 =ifelse(!is.na(other_admission_diag_1), other_admission_diag_1, "__NA"),
+         other_admission_diag_2 =ifelse(!is.na(other_admission_diag_2), other_admission_diag_2, "__NA"),
+         other_admission_diag_3 =ifelse(!is.na(other_admission_diag_3), other_admission_diag_3, "__NA"),
+         other_admission_diag_4 =ifelse(!is.na(other_admission_diag_4), other_admission_diag_4, "__NA"),
+         other_admission_diag_5 =ifelse(!is.na(other_admission_diag_5), other_admission_diag_5, "__NA"),
+         admisn_diag_not_listed =ifelse(!is.na(admisn_diag_not_listed), admisn_diag_not_listed, "__NA")) %>%
+  mutate(all.diag = paste(pry_adm_diag, adm_diag_1, adm_diag_2, adm_diag_3, other_admission_diag_1, 
+                          other_admission_diag_2, other_admission_diag_3, other_admission_diag_4, 
+                          other_admission_diag_5, admisn_diag_not_listed, sep = ';')) %>%
+  mutate(all.diag = gsub("-1", "", all.diag)) %>%
+  mutate(all.diag = gsub("from other and unspecified causes", "", all.diag)) %>%
+  mutate(all.diag = gsub("\\b__NA\\b", "", all.diag)) %>%
+  mutate(all.diag = gsub("\t", "", all.diag)) %>%
+  mutate(all.diag = gsub("unspecified|preferred|inclusion", "", all.diag)) %>% 
+  mutate(all.diag = gsub("[A-Za-z]{,1}[0-9]{,2}\\.[0-9]{1}\\\t|[A-Za-z]{,1}[0-9]{,2}\\\t", "", all.diag)) %>% 
+  mutate(all.diag = gsub("__NA", "", all.diag)) %>%
+  mutate(all.diag =  gsub("([;])\\1+", "\\1", all.diag)) %>%
+  mutate(all.diag = gsub("^;", "", all.diag)) %>%
+  mutate(all.diag = gsub(";$", "", all.diag)) %>%
+  mutate(all.diag = ifelse(!grepl('[,]',all.diag),all.diag,
+                              as.character(sapply(all.diag, function(x){
+                                x = unlist(sapply(unlist(strsplit(x, ";")), function(y){
+                                  y = unlist(strsplit(y, ","))[2]
+                                }))
+                                x = ifelse(as.character(x) == "NULL", "", x)
+                                x = paste(x, collapse = ";")
+                              })))) %>%
+  mutate(all.diag =  gsub("^\\s+|\\s+$", "", all.diag)) %>%
+  mutate(all.diag=gsub('^NA;','',all.diag)) %>%
+  mutate(all.diag=gsub('\\bNA\\b','',all.diag)) %>%
+  mutate(all.diag=gsub(';NA;','',all.diag)) %>%
+  
+## Tuti's additions: remove duplicates; remove trailing dashes
+  mutate(all.diag = unname(unlist(sapply(all.diag,function(x){
+  if(nchar(x) > 0){
+    x = unlist(strsplit(x, ";"))
+    x = gsub("-","",x)
+    x = unique(x)
+    x = x[x!=""]
+    x = paste(x, collapse = ";")
+  }
+  return(x)
+})))) %>%
+  dplyr::select(key,all.diag) %>%
+  dplyr::rename(Admission.Diagnoses = all.diag) %>%
+  as.data.table()
+
+
+Dataset <- merge(Dataset, Diagnosis.Data, by = "key")
+
+combineAdmissionDiagnoses <- function(row.data){
+  #browser()
+  diagnoses <- row.data[,copy(.SD),
+                        .SDcols = c("Pumwani.Admit.Diagnoses", "Clear.Diagnosis",
+                                    "Pumwani.Other.Diagnosis", "Pumwani.Other.Diagnosis2",
+                                    "Admission.Diagnoses")]
+  diagnoses <- as.character(diagnoses)
+  diagnoses <- diagnoses[diagnoses!=""]
+  if(is_empty(diagnoses))
+    return(NA_character_)
+  diagnoses <- unique(diagnoses[!is.na(diagnoses)])
+  if(is_empty(diagnoses))
+    return(NA_character_)
+  diagnoses <- paste0(diagnoses,collapse = ";")
+  return(diagnoses)
+}
+
+Dataset[, All.Admission.Diagnoses:= combineAdmissionDiagnoses(.SD), by=key]
+
+
+set(Dataset,,
+    c("pry_adm_diag","adm_diag_1","adm_diag_2","adm_diag_3",
+      "other_admission_diag_1","other_admission_diag_2",
+      "other_admission_diag_3","other_admission_diag_4",
+      "other_admission_diag_5","admisn_diag_not_listed",
+      "Pumwani.Admit.Diagnoses", "Clear.Diagnosis",
+      "Pumwani.Other.Diagnosis", "Pumwani.Other.Diagnosis2", 
+      "Admission.Diagnoses"), NULL)
+
+setnames(Dataset, "All.Admission.Diagnoses", "Admission.Diagnoses") 
+
+
+Diagnoses <- parallel::parLapply(cl,Dataset$Admission.Diagnoses, get_diagnoses_standardised)
+Diagnoses.Frame <- rbindlist(Diagnoses)
+names(Diagnoses.Frame) <- paste0("Admit.Diagnose.",names(Diagnoses.Frame))
+Diagnoses.Frame$key <- Dataset$key
+Dataset <- merge(Dataset, Diagnoses.Frame, by = "key")
+
+
+
+
+### Discharge diagnosis
+Discharge.Diagnosis.Data <- Dataset %>% 
+  dplyr::select(key, disch_diag_1, disch_diag_2, disch_diag_3, disch_diag_4, disch_diag_5,
+                primary_disch_diagnosis, disch_diag_1, disch_diag_2, disch_diag_3,
+  other_discharge_diag_1, other_discharge_diag_2, other_discharge_diag_3,
+  other_discharge_diag_4, other_discharge_diag_5, other_disch_diag_old,
+  other_discharge_diag_unlisted, other_discharge_diagn2_069) 
+
+Discharge.Diagnosis.Data <- Discharge.Diagnosis.Data[, lapply(.SD, tolower),]
+Discharge.Diagnosis.Data <- Discharge.Diagnosis.Data[, lapply(.SD, stringr::str_trim),]
+Discharge.Diagnosis.Data[Discharge.Diagnosis.Data == "empty"] <- NA
+Discharge.Diagnosis.Data[Discharge.Diagnosis.Data == "-1"] <- NA
+Discharge.Diagnosis.Data[is.na(Discharge.Diagnosis.Data)] <- "__NA"
+
+
+pattern <- "[a-z]{,1}[0-9]{,2}\\.[0-9]{1}"
+
+Discharge.Diagnosis.Data.New <- Discharge.Diagnosis.Data %>%
+  unite(all.diag, contains("diag"),sep = ';') %>%
+  mutate(all.diag = gsub("__NA", "", all.diag)) %>%
+  mutate(all.diag = gsub("from other and unspecified causes", "", all.diag)) %>%
+  mutate(all.diag = gsub("\\b__NA\\b", "", all.diag)) %>%
+  mutate(all.diag = gsub("\t", "", all.diag)) %>%
+  mutate(all.diag = gsub("unspecified|preferred|inclusion", "", all.diag)) %>% 
+  mutate(all.diag = gsub(pattern, "", all.diag)) %>% 
+  mutate(all.diag = gsub("[a-z]{1}[0-9]{2}", "", all.diag)) %>%
+  mutate(all.diag = gsub("\\-", "", all.diag)) %>% 
+  mutate(all.diag = gsub("[0-9]{1}", "", all.diag)) %>%
+  mutate(all.diag = gsub("/", " ", all.diag)) %>%
+  mutate(all.diag = gsub("\\(", " ", all.diag)) %>%
+  mutate(all.diag = gsub("\\)", " ", all.diag)) %>%
+  mutate(all.diag =  gsub("([;])\\1+", "\\1", all.diag)) %>%
+  mutate(all.diag = gsub("^;", "", all.diag)) %>%
+  mutate(all.diag = gsub(";$", "", all.diag)) %>%
+  mutate(all.diag = ifelse(!grepl('[,]',all.diag),all.diag,
+                              as.character(sapply(all.diag, function(x){
+                                x = unlist(sapply(unlist(strsplit(x, ";")), function(y){
+                                  y = unlist(strsplit(y, ","))[2]
+                                }))
+                                x = ifelse(as.character(x) == "NULL", "", x)
+                                x = paste(x, collapse = ";")
+                              })))) %>%
+  mutate(all.diag =  gsub("^\\s+|\\s+$", "", all.diag)) %>%
+  mutate(all.diag=gsub('^NA;','',all.diag)) %>%
+  mutate(all.diag=gsub('\\bNA\\b','',all.diag)) %>%
+  mutate(all.diag=gsub(';NA;','',all.diag)) %>%
+## Tuti's additions: remove duplicates; remove trailing dashes
+  mutate(all.diag = unname(unlist(sapply(all.diag,function(x){
+  if(nchar(x) > 0){
+    x = unlist(strsplit(x, ";"))
+    x = gsub("-","",x)
+    x = unique(x)
+    x = x[x!=""]
+    x = paste(x, collapse = ";")
+  }
+  return(x)
+})))) %>%
+  dplyr::select(key,all.diag) %>%
+  dplyr::rename(Discharge.Diagnoses = all.diag) %>%
+  as.data.table()
+
+trim_diagnosis_spaces <- function(txt){
+  txt.split <- unlist(strsplit(txt, ";"))
+  txt.split <- stringr::str_trim(txt.split)
+  txt.split = paste(txt.split, collapse = ";")
+  return(txt.split)
+}
+
+Discharge.Diagnosis.Data.New$Discharge.Diagnoses <- parallel::parLapply(
+  cl,
+  Discharge.Diagnosis.Data.New$Discharge.Diagnoses,
+  trim_diagnosis_spaces
+)
+
+Discharge.Diagnosis.Data.New$key <- as.integer(Discharge.Diagnosis.Data.New$key)
+Dataset <- merge(Dataset, Discharge.Diagnosis.Data.New, by = "key")
+
+
+combineDischargeDiagnoses <- function(row.data){
+  #browser()
+  diagnoses <- row.data[,copy(.SD),
+                        .SDcols = c("Pumwani.Discharge.Diagnoses", "Discharge.Diagnoses")]
+  diagnoses <- as.character(diagnoses)
+  diagnoses <- diagnoses[diagnoses!=""]
+  if(is_empty(diagnoses))
+    return(NA_character_)
+  diagnoses <- unique(diagnoses[!is.na(diagnoses)])
+  if(is_empty(diagnoses))
+    return(NA_character_)
+  diagnoses <- paste0(diagnoses,collapse = ";")
+  return(diagnoses)
+}
+
+Dataset[, All.Discharge.Diagnoses:= combineDischargeDiagnoses(.SD), by=key]
+
+Dataset %<>% 
+  dplyr::select(-disch_diag_1, -disch_diag_2, -disch_diag_3, -disch_diag_4, -disch_diag_5,
+                -primary_disch_diagnosis, -disch_diag_1, -disch_diag_2, -disch_diag_3,
+  -other_discharge_diag_1, -other_discharge_diag_2, -other_discharge_diag_3,
+  -other_discharge_diag_4, -other_discharge_diag_5, -other_disch_diag_old,
+  -other_discharge_diag_unlisted, -other_discharge_diagn2_069,
+  -Pumwani.Discharge.Diagnoses, -Discharge.Diagnoses) 
+
+setnames(Dataset, "All.Discharge.Diagnoses", "Discharge.Diagnoses") 
+
+
+Discharge.Diagnoses <- parallel::parLapply(
+  cl,
+  Dataset$Discharge.Diagnoses, 
+  get_diagnoses_standardised
+)
+Discharge.Diagnoses.Frame <- rbindlist(Discharge.Diagnoses)
+names(Discharge.Diagnoses.Frame) <- paste0("Discharge.Diagnose.",names(Discharge.Diagnoses.Frame))
+Discharge.Diagnoses.Frame$key <- Discharge.Diagnosis.Data.New$key
+Dataset <- merge(Dataset, Discharge.Diagnoses.Frame, by = "key")
+Dataset$Discharge.Diagnoses <- NULL
+
+rm(Diagnoses.Frame)
+rm(Discharge.Diagnoses.Frame)
+rm(Diagnosis.Data)
+rm(Discharge.Diagnosis.Data)
+rm(Discharge.Diagnosis.Data.New)
+rm(Diagnoses)
+
+parallel::stopCluster(cl)
+foreach::getDoSeqRegistered()
+
+
+Dataset %<>%
+  rowwise() %>%
+  dplyr::mutate(
+    Admission.Diagnosis.Count = sum(c_across(`Admit.Diagnose.Birth Asphyxia`:
+                                               `Admit.Diagnose.Other`)),
+    Discharge.Diagnosis.Count = sum(c_across(`Discharge.Diagnose.Birth Asphyxia`:
+                                             `Discharge.Diagnose.Other`))
+    ) %>%
+  as.data.table()
+
+```
+
+
+### Re-coding date & time
+
+```{r warning=FALSE, message=FALSE}
+#Tag dates based on valid entries
+Dataset %<>%
+  mutate(Date.Valid = ifelse(date_adm < date_of_birth, F,
+                             ifelse(date_discharge < date_of_birth, F, 
+                                    ifelse(date_discharge < date_adm, F, T)
+                                    )
+                             )
+         )
+
+
+ValidTime <- function(x){
+  x = gsub("\\s", "", x)
+  x = gsub("23:21hrs 23:21hrs", "23:21hrs", x)
+  x = ifelse(grepl("hr|am|pm",  x, ignore.case = T), gsub("\\.", ":", x), x)
+  x = ifelse(!grepl("am$|pm$",  x, ignore.case = T), gsub(":", "", x), x)
+  x = gsub("hrs|hr", "",tolower(x))
+  x = ifelse(grepl('am$|pm$', x, ignore.case = T), 
+             format(as.POSIXct(x,format='%I:%M %p') ,format = "%H:%M:%S %p"), x)
+  x = ifelse(nchar(x) < 4 & !grepl('am$|pm$', x, ignore.case = T) & x != "-1", paste0('0', x), x)
+  x = ifelse(x !='-1' & !grepl('am$|pm$', ignore.case = T, x), 
+             format(strptime(x, format='%H%M'), '%H:%M:%S %p'), x)
+  x = ifelse(x !='-1' & grepl('am$|pm$', ignore.case = T, x) & nchar(x) <=7,
+             format(as.POSIXct(x,format='%H%M %p') ,format = "%H:%M:%S %p"), x)
+}
+
+# Time re-coding ---------------------------------------------
+Dataset <- as.data.frame(Dataset)
+#t_cols<-grep("t_adm|t_discharge\\b|\\bt_birth\\b", names(Dataset), v = T)
+t_cols <- c("t_adm", "t_discharge", "t_birth", "cpap_start_time", "cpap_end_time") 
+for (c in t_cols){
+  Dataset[,c]<-sapply(Dataset[,c], ValidTime)
+}
+Dataset %<>% as.data.table()
+
+# Default time
+Default.Time <- "09:00:00 AM"
+Dataset[,Admission.DateTime:= as.POSIXct(paste(date_adm, ifelse(!is.na(t_adm),t_adm,Default.Time)),
+                                         format="%Y-%m-%d %H:%M:%S %p")] 
+
+Dataset[,Birth.DateTime:= as.POSIXct(paste(date_of_birth, ifelse(!is.na(t_birth),t_birth, 
+                                                                 Default.Time)),
+                                          format="%Y-%m-%d %H:%M:%S %p")] 
+
+Dataset[,Discharge.DateTime:= as.POSIXct(paste(date_discharge, ifelse(!is.na(t_discharge),t_discharge, 
+                                                                      Default.Time)),
+                                         format="%Y-%m-%d %H:%M:%S %p")] 
+
+```
+
+
+## Rename key columns
+```{r warning=FALSE, message=FALSE}
+
+Dataset %<>%
+  mutate(date_adm = as.Date(date_adm, format ="%Y-%m-%d")) %>%
+  filter(date_adm > as.Date("2014-03-31", formart = "%Y-%m-%d")) %>%
+  mutate(Year = strftime(date_adm, format = "%Y")) %>%
+  filter(Year != 2017) %>% # Remove records from strike year
+  dplyr::rename(c(Birth.Weight = birth_wt,
+                  Hospital = hosp_id,
+                  Weight.Now = wt_now,
+                  CPAP = cpap,
+                  KMC = k_mother_care,
+                  Referral.Status = referred_to_hospital,
+                  Temparature = temperature_degrees_celciu,
+                  Delivery = delivery,
+                  Outcome = outcome,
+                  Discharge.Weight = discharge_weight,
+                  Born.Before.Arrival = bba))
+
+Dataset[is.na(Born.Before.Arrival), Born.Before.Arrival := "No"]
+Dataset[, Born.Before.Arrival := ifelse(
+  !is.na(Born.Before.Arrival),
+  ifelse(Born.Before.Arrival == "Yes", T, F),
+NA)]
+Dataset[, Delivery := ifelse(Delivery =='BREECH', 'Breech', Delivery)]
+
+### Re-coded after mortality review (From Aluvaala Scripts)
+Dataset$Outcome[Dataset$recid==2392] <- "Dead"
+
+```
+
+
+### Demographic and Anthropometic data
+```{r warning=FALSE, message=FALSE}
+
+
+Dataset[,Discharge.Weight := ifelse(as.numeric(Discharge.Weight) > 100, 
+                               as.numeric(Discharge.Weight)/1000, 
+                               Discharge.Weight)]
+
+Dataset[, Weight.Now := ifelse((is.na(Weight.Now)) & date_adm == date_of_birth, 
+                               Birth.Weight, Weight.Now)]
+
+Dataset[,Weight.Now := ifelse(as.numeric(Weight.Now) > 100, 
+                               as.numeric(Weight.Now)/1000, 
+                               Weight.Now)]
+
+Dataset[ Weight.Now > 8.0, Weight.Now :=NA]
+
+
+Dataset[,Birth.Weight := ifelse(as.numeric(Birth.Weight) > 100, 
+                               as.numeric(Birth.Weight)/1000, 
+                               Birth.Weight)]
+
+Dataset %<>%
+  dplyr::mutate(
+    Birth.Weight.Below.2kg = 
+      ifelse(!is.na(Birth.Weight),
+             ifelse(as.numeric(Birth.Weight)>0 & as.numeric(Birth.Weight) < 2, 
+                    T, 
+                    F),
+    NA))
+
+
+Weight.CutOffs <- c(0, 0.99, 1.49, 2.49, 4, 8)
+Dataset$Weight.Group <- cut(Dataset$Birth.Weight,
+                            breaks = Weight.CutOffs,
+                            labels = c('1000 gms & Below (ELBW)', 
+                                       '1001 - 1499 gms (VLBW)', 
+                                       '1500 - 2499 gms (LBW)',
+                                       '2500 - 4000 gms (NBW)',
+                                       '> 4000 gms (Macrosomia)'))
+
+Dataset %<>%
+  mutate(
+    Weight.Group = as.character(Weight.Group),
+    Weight.Group = ifelse(is.na(Weight.Group), NA, Weight.Group)
+  )
+
+Dataset %<>% 
+  mutate(Outcome = as.character(Outcome)) %>%
+  mutate(Temp.Group = ifelse(is.na(Temparature) | as.numeric(Temparature) < 0, 
+                             NA, 
+                             ifelse(Temparature < 32, 
+                                    'Severe hypothermia (< 32.0)',
+                             ifelse(Temparature <= 35.9 & Temparature >= 32, 
+                                    'Moderate hypothermia (32.0-35.9)', 
+                             ifelse(Temparature <= 36.4 & Temparature >= 36.0, 
+                                    'Cold stress (36.0-36.4)',
+                             ifelse(Temparature <= 37.5 & Temparature >= 36.5,
+                                    'Normal Temperature (36.5-37.5)', 
+                                    "Hyperthemia (> 37.5)")))))
+         )
+
+
+
+#Sex of the child
+#Re-code indeterminate to Missing
+Dataset[, child_sex := gsub("(^|[[:space:]])([[:alpha:]])", "\\1\\U\\2", 
+                            child_sex, perl=TRUE)]
+Dataset[,Male := ifelse(!(is.na(child_sex)|(child_sex %in% c("Empty",
+                                                             "Indeterminate"))), 
+                      ifelse(child_sex == "Male", T, F), NA)]
+
+# Re-code gestational age
+Dataset %<>%
+  mutate(Gestational.Age= ifelse(!is.na(gest) & (gest <24 | gest >44), NA, gest)
+  )
+
+Dataset[,gest:=NULL]
+breaks<-c(0,27,31,33,36,42,48)
+Dataset$Gestational.Group <- cut(Dataset$Gestational.Age,
+                               breaks=breaks,
+                               label=c("Extreme(<28)",
+                                       "Very(28-<32)",
+                                       "Moderate(32-<34)",
+                                       "Late(34-36)",
+                                       "Term(37-42)",
+                                       "Postdates(>42)"))
+
+## Child's Age
+report.data <- Dataset[, copy(.SD), .SDcols = c("age_days", 
+                                                "age_less_than_24hrs", 
+                                                "date_adm", 
+                                                "date_of_birth", 
+                                                "t_adm", 
+                                                "t_birth",
+                                                "Birth.DateTime", 
+                                                "Admission.DateTime",
+                                                "key")]
+report.data[, age.doc := FALSE]
+report.data[!is.na(age_days) | !is.na(age_less_than_24hrs) | 
+              (!is.na(date_adm) & !is.na(date_of_birth)), 
+            age.doc :=TRUE, by=key]
+report.data[, Age.Hours := as.numeric(difftime(Admission.DateTime,Birth.DateTime, 
+                                               units = "hours"))]
+
+breaks<-c(-0.0001,1*24,6*24,28*24,180*24) #
+
+breaks.Xpen <-c(-0.0001,7*24, 180*24)
+
+report.data$Age.Xpen = cut(report.data$Age.Hours,
+                           breaks = breaks.Xpen,
+                           labels = c("Age <= 7 days", 
+                                      "Age >7 days"))
+
+report.data$Age=cut(report.data$Age.Hours,
+                          breaks=breaks,
+                      labels = c("Age <= 24hrs", 
+                                 "Age >1 - 6 days", 
+                                 "Age 7 - 28 days",
+                                 "Age > 28 days"))
+
+report.data[is.na(Age) & !is.na(age_less_than_24hrs) & 
+              age_less_than_24hrs == "Yes", Age:= "Age <= 24hrs"]
+
+report.data[is.na(Age) & !is.na(age_days), 
+            Age:=ifelse(age_days==1, "Age <= 24hrs",
+  ifelse(age_days < 7,"Age >1 - 6 days",
+         ifelse(age_days < 29, "Age 7 - 28 days", "Age > 28 days"))
+)]
+
+report.data[is.na(Age) & is.na(age_days) & date_adm == date_of_birth, 
+            Age := "Age <= 24hrs"] 
+
+report.data[Age %in% c("Age <= 24hrs", "Age >1 - 6 days"), 
+            Age.Xpen := "Age <= 7 days"]
+
+Dataset$Age <- report.data$Age
+Dataset$Age.Xpen <- report.data$Age.Xpen
+rm(report.data)
+```
+
+
+## Length of Stay
+```{r message=FALSE, warning=FALSE}
+
+## LOS: Length of Stay
+## Maximum stay capped at 100 days
+Dataset %<>% 
+  dplyr::mutate(
+    LOS = ifelse(!is.na(as.Date(date_discharge)) & 
+                   !is.na(as.Date(date_discharge)),
+                 as.numeric(as.Date(date_discharge) - as.Date(date_adm)), NA),
+    LOS = ifelse(!is.na(LOS) & LOS < 101, LOS, NA))
+
+LOS.CutOffs <- c(0, 1, 2, 7, 100)
+Dataset$LOS.Group <- cut(Dataset$LOS,
+                         breaks = LOS.CutOffs,
+                         labels = c('0-24 Hours', '>24-48 Hours', '>2-7 Days',
+                                    '>7 Days'))
+
+```
+
+
+## Documentation variables
+```{r  warning=FALSE, message=FALSE}
+
+# NAR used
+Dataset[, NAR.Use.Recorded := ifelse(!is.na(nar_used),
+                                     ifelse(nar_used == "NAR", T, F), NA)]
+
+Dataset %<>%
+  dplyr::mutate(Admission.Weight.Recorded =
+                  ifelse(!is.na(Weight.Now) & as.numeric(Weight.Now) > 0, T, F))
+
+# Weight Monitoring
+Dataset[, Weight.Monitoring.Recorded := ifelse(!is.na(weight_doc),
+                                               ifelse(weight_doc == "No", F, T), 
+                                               NA)]
+
+# Apgar.Recorded
+Dataset[, Apgar.Recorded := ifelse(!is.na(apg_doc),
+                                   ifelse(apg_doc == "Yes", T, F), NA)]
+
+### Vitals
+Dataset[, Vitals.Pulse.Rate.Recorded := ifelse(
+  !is.na(vital_signs_monitored___1),
+  ifelse(vital_signs_monitored___1 == "Yes", T, F),
+  NA
+)]
+
+Dataset[, Vitals.Pulse.Rate.Count := no_of_times_puls_monitored]
+
+Dataset[, Vitals.Temp.Recorded := ifelse(
+  !is.na(vital_signs_monitored___2),
+  ifelse(vital_signs_monitored___2 == "Yes", T, F),
+  NA
+)]
+
+Dataset[, Vitals.Temp.Count := no_of_times_temp_monitored]
+
+Dataset[, Vitals.Pulse.Oximetry.Cyanosis.Recorded := ifelse(
+  !is.na(vital_signs_monitored___3),
+  ifelse(vital_signs_monitored___3 == "Yes", T, F),
+  NA
+)]
+
+Dataset[, Vitals.Pulse.Oximetry.Recorded := ifelse(
+          !is.na(oxygen_sat_monitored),
+          ifelse(oxygen_sat_monitored == "Yes", T, F),
+          NA
+)]
+Dataset[, Vitals.Pulse.Oximetry.Count := no_of_times_oxy_monitored]
+
+Dataset[!is.na(oxygen_sat_monitored) & oxygen_sat_monitored == "No", 
+        Vitals.Cyanosis.Recorded := ifelse(
+          !is.na(cyanosis_assessed),
+          ifelse(cyanosis_assessed == "Yes", T, F),
+          NA
+)]
+
+Dataset[!is.na(oxygen_sat_monitored) & oxygen_sat_monitored == "No", 
+        Vitals.Cyanosis.Count := no_times_cyanosis_assessed]
+
+Dataset[, Vitals.Respiratory.Rate.Recorded := ifelse(
+  !is.na(vital_signs_monitored___4),
+  ifelse(vital_signs_monitored___4 == "Yes", T, F),
+  NA
+)]
+
+Dataset[, Vitals.Respiratory.Rate.Count := no_of_times_resp_monitored]
+
+```
+
+
+
+### Clinical signs and symptoms
+
+```{r warning=FALSE, message=FALSE}
+
+
+### Maternal Values
+Dataset[, Maternal.Age := ifelse(!is.na(mothers_age),mothers_age,NA)]
+Dataset[, Maternal.HIV := ifelse(!is.na(maternal_hiv), 
+                                 ifelse(maternal_hiv == "Positive", T,F), NA)]
+Dataset[, Maternal.VRDL := ifelse(!is.na(maternal_vdrl), 
+                                  ifelse(maternal_vdrl == "Positive", T,F), NA)]
+Dataset[, Maternal.Gravidity := ifelse(!is.na(gravity), gravity, NA)]
+Dataset[!is.na(parity_live_birth) & parity_live_birth > 15, 
+        parity_live_birth := NA]
+Dataset[!is.na(parity_abortion) & parity_abortion > 15, 
+        parity_abortion := NA]
+Dataset[!is.na(parity_live_birth) & !is.na(parity_abortion), 
+        Maternal.Parity := parity_live_birth + parity_abortion]
+
+# Gestational size
+Dataset[, Gestational.Size := ifelse(!is.na(gest_size), gest_size, NA)]
+
+# Crackles
+Dataset[, Crackles:=ifelse(!is.na(crackles),
+                                   ifelse(crackles=="Yes",T,F),NA)]
+
+# Fever
+Dataset[, Fever:=ifelse(!is.na(fever),
+                                   ifelse(fever=="Yes",T,F),NA)]
+
+# Difficulty Breathing
+Dataset[, Difficulty.Breathing:=ifelse(!is.na(difficulty_breathing),
+                                   ifelse(difficulty_breathing=="Yes",T,F),NA)]
+
+# Irritable
+Dataset[, Irritable:=ifelse(!is.na(irritable),
+                                   ifelse(irritable=="Yes",T,F),NA)]
+
+# Slow Capillary Fill
+Dataset[!is.na(cap_refill), 
+        Slow.Capillary.Refill := ifelse(cap_refill %in% c("1 second",
+                                                          "2 seconds",
+                                                          "2-3 seconds",
+                                                          "3 seconds"),
+                                        "No",
+                                        ifelse(cap_refill== "More than 3 secs",
+                                               "Yes",
+                                               "Indeterminate"))]
+Dataset[, Capillary.Refill := ifelse(!is.na(cap_refill),cap_refill, NA)]
+
+
+# Recode Empty & Not specified  to NA
+Dataset[, Difficulty.Feeding:=ifelse(!is.na(difficulty_feeding),
+                                     ifelse(difficulty_feeding=="Yes",T,F),NA)]
+
+# Convulsions
+Dataset[, Convulsions:=ifelse(!is.na(convulsions),
+                              ifelse(convulsions=="Yes",T,F),NA)]
+Dataset[!is.na(partial_focal_fits) & partial_focal_fits=="Yes", Convulsions:= T]
+
+
+# Cyanosis
+Dataset[, Central.Cyanosis:=ifelse(!is.na(central_cyanosis),
+                                   ifelse(central_cyanosis=="Yes",T,F),NA)]
+
+# Floppy/Unable to suck
+# Combine inability to suck or breastfeed with floppy
+Dataset[, Floppy:= ifelse(!is.na(redced_movement_floppy),
+                          ifelse(redced_movement_floppy == "Yes",T,F),NA)]
+Dataset[!is.na(suck_breastfeed) & suck_breastfeed=="No", Floppy:=T ]
+Dataset[!is.na(floppy_inability_to_suck) & floppy_inability_to_suck=="Yes", 
+        Floppy:=T]
+Dataset[!is.na(reduced_movement) & reduced_movement == "Yes", Floppy := T]
+
+Dataset[is.na(Floppy) & !is.na(floppy_inability_to_suck) & 
+          floppy_inability_to_suck == "No", Floppy := F]
+Dataset[is.na(Floppy) & !is.na(suck_breastfeed) & 
+          suck_breastfeed == "Yes", Floppy := F]
+Dataset[is.na(Floppy) & !is.na(reduced_movement) 
+        & reduced_movement == "No", Floppy := F]
+
+# Indrawing
+Dataset[, Indrawing:=ifelse(!is.na(indrawing),
+                            ifelse(indrawing =="severe",T,F),NA)]
+Dataset[!is.na(severe_indrawing) & severe_indrawing=="Yes", Indrawing:=T]
+Dataset[!is.na(severe_indrawing) & severe_indrawing =="No" & is.na(Indrawing), 
+        Indrawing:=F]
+
+
+# Bulging fontanelle
+Dataset[, Bulging.Fontanelle:=ifelse(!is.na(bulging_fontanelle),
+                         ifelse(bulging_fontanelle=="Yes",T,F),NA)]
+
+# Grunting
+Dataset[, Grunting:=ifelse(!is.na(grunting),
+                                   ifelse(grunting=="Yes",T,F),NA)]
+
+# Jaundice
+Dataset[, Jaundice:=ifelse(!is.na(jaundice),
+                                   ifelse(jaundice !="none(0)",T,F),NA)]
+
+# Pallor
+Dataset[, Pallor.Anaemia:=ifelse(!is.na(pallor_anaemia),
+                                   ifelse(pallor_anaemia !="none",T,F),NA)]
+
+# AGPAR @ 5 minutes
+Apgar.CutOffs <- c(0, 3, 6, 11)
+Dataset$Apgar.Score.5min <- cut(Dataset$apgar_5min,
+                           breaks=Apgar.CutOffs,
+                           labels = c("0-3", "4-6", "7-10"))
+Dataset %<>%
+  mutate(
+    Apgar.Score.5min = as.character(Apgar.Score.5min),
+    Apgar.Score.5min = ifelse(!is.na(Apgar.Score.5min), 
+                              Apgar.Score.5min,
+                              NA)
+  )
+
+#Apnoea
+Dataset[, Apnoea := ifelse(!is.na(apnoea), ifelse(apnoea == "Yes", T,F), NA)]
+
+# Vomiting
+Dataset[, Vomiting := ifelse(!is.na(severe_vomiting), 
+                             ifelse(severe_vomiting == "Yes", T,F), NA)]
+
+#Bilateral.Air.Entry
+Dataset[, Bilateral.Air.Entry:= ifelse(!is.na(air_entry_bilateral), 
+                                       ifelse(air_entry_bilateral== "Yes", T,F),
+                                       NA)]
+
+# Stridor (variable retired)
+Dataset[, Stridor := ifelse(!is.na(stirdor), 
+                            ifelse(stirdor == "Yes", T,F), NA)]
+
+# Eye.Pus.Infection
+Dataset[, Eye.Pus.Infection := ifelse(!is.na(eye_pus), 
+                                      ifelse(eye_pus == "Yes", T,F), NA)]
+# Umbilical.Infection 
+Dataset[, Umbilical.Infection := ifelse(!is.na(umbilicus), 
+                                        ifelse(umbilicus != "Clean", T,F), NA)]
+
+# Skin rashes
+Dataset[, Skin.Rushes := ifelse(!is.na(skin), 
+                                ifelse(skin == "None / Normal", F, T), NA)]
+
+#HIV
+Dataset %<>%
+  dplyr::mutate(HIV =ifelse(!is.na(maternal_hiv),
+                     ifelse(maternal_hiv=='Positive', "Exposed", "Non-exposed"),
+                     NA))
+
+# Can.Suck.Breastfeed
+Dataset[,Can.Suck.Breastfeed := ifelse(!is.na(suck_breastfeed),
+                                       ifelse(suck_breastfeed == "Yes", T, F),
+                                       NA)]
+
+
+## Oxygen Saturation Cut-Offs
+Oxygen.Sat.CutOffs <- c(0, 79, 84, 89, 93, 100)
+Dataset$Oxygen.Sat.Group <- cut(Dataset$oxygen_saturation,
+                                breaks = Oxygen.Sat.CutOffs,
+                                labels = c("<80", 
+                                           "80-84",
+                                           "85-89", 
+                                           "90-93", 
+                                           ">93"))
+
+
+Dataset %<>% 
+  mutate(
+    Oxygen.Sat = as.numeric(oxygen_saturation)
+  )
+
+# Glucose Ordered
+Dataset[, Glucose.Ordered := ifelse(!is.na(glucose),
+                                    ifelse(glucose == "Yes", T, F),
+                                    NA)]
+
+Dataset[!is.na(Glucose.Ordered) & !is.na(Can.Suck.Breastfeed) & 
+          Can.Suck.Breastfeed == F, 
+        Glucose.Order.Unable.Breastfeed := ifelse(
+          Glucose.Ordered == T, T, F)]
+
+```
+
+
+## Treatment
+```{r warning=FALSE, message=FALSE}
+
+## Treatment sheet present
+Dataset[!is.na(t_sheet), Treatment.Sheet.Present := ifelse(t_sheet == "Yes",
+                                                           TRUE,
+                                                           FALSE)]
+
+### Phenobarbital
+searchPhenobarbitalPrescribed <- function(otherTreatmentVars) {
+  treatmentVars <- as.character(otherTreatmentVars[1, ])
+  treatmentVars <- treatmentVars[!is.na(treatmentVars)]
+  if (is_empty(treatmentVars)) {
+    return(NA)
+  } else{
+    #browser()
+    treatmentVars <- tolower(treatmentVars)
+    Phenobarbital <-
+      treatmentVars[grepl("pheno", tolower(treatmentVars))]
+    if (is_empty(Phenobarbital)) {
+      return(FALSE)
+    } else{
+      return(TRUE)
+    }
+  }
+}
+
+Dataset[, Other.Phenobarbital := searchPhenobarbitalPrescribed(.SD),
+        .SDcols = c(
+          "other_drugs_1",
+          "other_drugs_2",
+          "other_drugs_3",
+          "other_drugs_4",
+          "other_drugs_5",
+          "other_drugs_not_listed",
+          "other_treatment_2",
+          "other_drugs_not_listed_abo",
+          "admisn_dx_not_listed"
+        ),
+        by = "key"]
+
+
+# Phenobarbital Prescribed
+Dataset[, Phenobarbital.Prescribed := NA]
+Dataset[!is.na(phenobarb), Phenobarbital.Prescribed := F]
+Dataset[!is.na(phenobarb), Phenobarbital.Prescribed := ifelse(
+  phenobarb == "Yes", T, F
+)]
+Dataset[is.na(Phenobarbital.Prescribed) & !is.na(Other.Phenobarbital), 
+        Phenobarbital.Prescribed := F]
+Dataset[!is.na(Other.Phenobarbital) & Other.Phenobarbital == TRUE,
+        Phenobarbital.Prescribed := T]
+
+set(Dataset, , c('phenobarb', 'Other.Phenobarbital'), NULL)
+
+
+# Antibiotics Prescribed
+# Gentamicin + Penicillin
+Dataset[!is.na(pen) & !is.na(genta), Antibiotics.Prescribed:=F ]
+Dataset[(!is.na(pen) & pen == "Yes") & (!is.na(genta) & genta == "Yes"), 
+        Antibiotics.Prescribed := T]
+Dataset[!is.na(Antibiotics.Prescribed),
+        Antibiotics.Prescribed.Admission := ifelse(Antibiotics.Prescribed == T, T, F)]
+
+
+Dataset[!is.na(Antibiotics.Prescribed.Admission) & 
+          (Antibiotics.Prescribed.Admission == T) &
+          !(date_prescribed == date_adm & date_gentamycin_prescribed == date_adm),
+        Antibiotics.Prescribed.Admission := F]
+
+# Oxygen Prescribed
+Dataset[!is.na(oxygen_ordered), 
+        Oxygen.Prescribed := ifelse(oxygen_ordered == "Yes", T, F)]
+
+Dataset[!is.na(Oxygen.Prescribed),
+        Oxygen.Prescribed.Admission := ifelse(
+          (Oxygen.Prescribed == T) &
+            (((!is.na(date_oxygen_prescribed) & 
+            date_oxygen_prescribed == date_adm)) | (is.na(date_oxygen_prescribed))),
+          T, F)]
+
+# Fluids Prescribed
+Dataset[!is.na(fluid_feed_monitoring_chart), 
+        Fluids.Prescribed := ifelse(fluid_feed_monitoring_chart == "Yes", T, F)]
+
+Dataset[!is.na(Fluids.Prescribed), 
+        Fluids.Prescribed.Admission := ifelse(
+          (Fluids.Prescribed == T) & 
+            !is.na(date_fluid_presc) & 
+            date_fluid_presc == date_adm, T, F)]
+
+Dataset[, Fluids.Volume := total_volume_of_iv_fluids]
+Dataset[, Fluids.Duration := duration_of_iv_fluid_presc]
+
+Dataset[, Fluids.Dosage := as.numeric(Fluids.Volume) /
+          (Birth.Weight * (24 / as.numeric(Fluids.Duration)))]
+
+Dataset[(Fluids.Dosage >= 48 &
+           Fluids.Dosage <= 72 & Birth.Weight >= 1.5) |
+          (Fluids.Dosage >= 64 &
+             Fluids.Dosage <= 96 & Birth.Weight < 1.5),
+        Fluids.Dose := "Correct"]
+Dataset[(Fluids.Dosage < 48 & Birth.Weight >= 1.5) |
+          (Fluids.Dosage < 64 & Birth.Weight < 1.5),
+        Fluids.Dose := "Under"]
+Dataset[(Fluids.Dosage > 72 & Birth.Weight >= 1.5) |
+          (Fluids.Dosage > 96 & Birth.Weight < 1.5),
+        Fluids.Dose := "Over"]
+
+# Feeds Prescribed
+Dataset[, Feeds.Prescribed := ifelse(
+  !is.na(child_prescribed_with_feed),
+  ifelse(child_prescribed_with_feed == "Yes", T, F),
+  NA
+)]
+
+Dataset[!is.na(Feeds.Prescribed), 
+        Feeds.Prescribed.Admission := ifelse(
+          (Feeds.Prescribed == T) &
+  !is.na(date_feeds_prescribed) & date_feeds_prescribed == date_adm, T, F)]
+
+Dataset[, Feeds.Type := type_of_feeds]
+Dataset[, Feeds.Route := feeding_route_prescribed]
+Dataset[, Feeds.Volume := feed_volume]
+Dataset[, Feeds.Frequency := freq_of_administration]
+
+# Calculate feed volume per kg
+no.of.times.adm <- as.character(Dataset$freq_of_administration)
+no.of.times.adm[no.of.times.adm == 'hrly'] <- '1hrly'
+no.of.times.adm <-
+  stringr::str_trim(gsub('hrly', '', no.of.times.adm))
+no.of.times.adm <-
+  suppressWarnings(24L / as.numeric(no.of.times.adm))
+
+feed_volume <- Dataset$feed_volume
+feeds.dosage <- feed_volume / Dataset$Birth.Weight * no.of.times.adm
+
+Dataset[, Feed.Dosage := feeds.dosage]
+
+Dataset[(Feed.Dosage >= 48 &
+           Feed.Dosage <= 72 & Birth.Weight >= 1.5) |
+          (Feed.Dosage >= 64 &
+             Feed.Dosage <= 96 & Birth.Weight < 1.5),
+        Feeds.Dose := "Correct"]
+Dataset[(Feed.Dosage < 48 & Birth.Weight >= 1.5) |
+          (Feed.Dosage < 64 & Birth.Weight < 1.5),
+        Feeds.Dose := "Under"]
+Dataset[(Feed.Dosage > 72 & Birth.Weight >= 1.5) |
+          (Feed.Dosage > 96 & Birth.Weight < 1.5),
+        Feeds.Dose := "Over"]
+
+
+
+# Genta prescribing
+## Dose calculation
+Dataset[, Genta.Prescribed := ifelse(!is.na(genta) &
+                                       genta == "Yes", T, F)]
+Dataset[, Genta.Prescribed.Well.Doc := NA]
+Dataset[Genta.Prescribed == T, Genta.Prescribed.Well.Doc := F]
+
+
+Dataset[!is.na(Genta.Prescribed.Well.Doc) &
+          !is.na(genta_freq) &
+          !is.na(genta_dose) &
+          !is.na(Birth.Weight) &
+          !is.na(Age),
+        Genta.Prescribed.Well.Doc := T]
+
+
+
+Dataset[Genta.Prescribed == TRUE, Genta.Dose.Kg := genta_dose / Birth.Weight]
+Dataset[, Genta.Profile := NA_character_]
+Dataset[, Genta.Dose := NA_character_]
+
+# Dosing profiles
+Dataset[Age %in% c("Age 7 - 28 days", "Age > 28 days"),
+        Genta.Profile := "Gentamicin 7.5mg"]
+Dataset[Age %in% c("Age <= 24hrs", "Age >1 - 6 days") &
+          Birth.Weight >= 2,
+        Genta.Profile := "Gentamicin 5mg"]
+Dataset[Age %in% c("Age <= 24hrs", "Age >1 - 6 days") &
+          Birth.Weight < 2,
+        Genta.Profile := "Gentamicin 3mg"]
+
+
+
+Dataset[Genta.Profile == "Gentamicin 7.5mg" & Genta.Dose.Kg < 6,
+        Genta.Dose := "Under"]
+Dataset[Genta.Profile == "Gentamicin 7.5mg" &
+          Genta.Dose.Kg >= 6 &
+          Genta.Dose.Kg <= 9 & genta_freq == "Once per day/once daily(OD)",
+        Genta.Dose := "Correct"]
+Dataset[Genta.Profile == "Gentamicin 7.5mg" &
+          (Genta.Dose.Kg > 9 | genta_freq != "Once per day/once daily(OD)"),
+        Genta.Dose := "Over"]
+
+
+Dataset[Genta.Profile == "Gentamicin 3mg" &
+          Birth.Weight < 2 & Genta.Dose.Kg < 2.4,
+        Genta.Dose := "Under"]
+Dataset[Genta.Profile == "Gentamicin 3mg" &
+          Birth.Weight < 2 & Genta.Dose.Kg >= 2.4 &
+          Genta.Dose.Kg <= 3.6  &
+          genta_freq == "Once per day/once daily(OD)", Genta.Dose := "Correct"]
+Dataset[Genta.Profile == "Gentamicin 3mg" &
+          Birth.Weight < 2 &
+          (Genta.Dose.Kg > 3.6 |
+             genta_freq != "Once per day/once daily(OD)"),
+        Genta.Dose := "Over"]
+
+
+Dataset[Genta.Profile == "Gentamicin 5mg" &
+          Birth.Weight >= 2 & Genta.Dose.Kg < 4,
+        Genta.Dose := "Under"]
+Dataset[Genta.Profile == "Gentamicin 5mg" &
+          Birth.Weight >= 2 & Genta.Dose.Kg >= 4 &
+          Genta.Dose.Kg <= 6 &
+          genta_freq == "Once per day/once daily(OD)", Genta.Dose := "Correct"]
+Dataset[Genta.Profile == "Gentamicin 5mg" &
+          Birth.Weight >= 2 &
+          (Genta.Dose.Kg > 6 | genta_freq != "Once per day/once daily(OD)"),
+        Genta.Dose := "Over"]
+
+Dataset[Genta.Prescribed == FALSE, Genta.Dose := NA_character_]
+Dataset[Genta.Prescribed == FALSE, Genta.Profile := NA_character_]
+
+
+# Penicillin Prescribing
+## Dose calculation
+Dataset[, Pen.Prescribed := ifelse(!is.na(pen) & pen == "Yes", T, F)]
+Dataset[, Pen.Prescribed.Well.Doc := NA]
+Dataset[Pen.Prescribed == T, Pen.Prescribed.Well.Doc := F]
+
+
+Dataset[!is.na(Pen.Prescribed.Well.Doc) &
+          !is.na(pen_freq) &
+          !is.na(pen_dose_mg) &
+          !is.na(Birth.Weight) &
+          !is.na(Age),
+        Pen.Prescribed.Well.Doc := T]
+
+
+Dataset[Pen.Prescribed == TRUE, Pen.Dose.Kg := pen_dose_mg / Birth.Weight]
+Dataset[, Pen.Profile := NA_character_]
+Dataset[, Pen.Dose := NA_character_]
+
+# Dosing profiles
+# Dosing profiles
+Dataset[Age.Xpen == "Age > 7 days",
+        Pen.Profile := "Penicillin QID"]
+Dataset[Age.Xpen == "Age <= 7 days",
+        Pen.Profile := "Penicillin BD"]
+
+
+
+
+Dataset[Pen.Profile == "Penicillin BD" & (Pen.Dose.Kg < 40000 |
+                                            pen_freq %in%
+                                            c("OD/once a day/24hrly",
+                                              "STAT")),
+        Pen.Dose := "Under"]
+
+Dataset[Pen.Profile == "Penicillin BD" &
+          (Pen.Dose.Kg >= 40000 &
+             Pen.Dose.Kg <= 60000) & pen_freq == "BD/twice a day/12hrly",
+        Pen.Dose := "Correct"]
+Dataset[Pen.Profile == "Penicillin BD" &
+          (
+            Pen.Dose.Kg > 60000 |
+              pen_freq  %in% c("TID/TDS/three times a day/8hrly", 
+                               "QID/4 times a day/6hrly")
+          ),
+        Pen.Dose := "Over"]
+
+
+Dataset[Pen.Profile == "Penicillin QID"  &
+          (Pen.Dose.Kg < 40000 | pen_freq != "QID/4 times a day/6hrly"),
+        Pen.Dose := "Under"]
+Dataset[Pen.Profile == "Penicillin QID" &
+          Pen.Dose.Kg >= 40000 &
+          Pen.Dose.Kg <= 60000 & pen_freq == "QID/4 times a day/6hrly ",
+        Pen.Dose := "Correct"]
+Dataset[Pen.Profile == "Penicillin QID" &
+          Pen.Dose.Kg > 60000, Pen.Dose := "Over"]
+
+
+
+
+Dataset[Pen.Prescribed == FALSE, Pen.Dose := NA_character_]
+Dataset[Pen.Prescribed == FALSE, Pen.Profile := NA_character_]
+
+Dataset[, Antibiotic.Prescription.Well.Doc := ifelse(Pen.Prescribed == T |
+                                                       Genta.Prescribed == T, F, 
+                                                     NA)]
+
+Dataset[Antibiotic.Prescription.Well.Doc == F,
+        Antibiotic.Prescription.Well.Doc := ifelse(
+          ((Pen.Prescribed == T & Genta.Prescribed == T) &
+             (Pen.Prescribed.Well.Doc == T & Genta.Prescribed.Well.Doc == T)
+        ) |
+          ((Pen.Prescribed == T &
+              Genta.Prescribed == F) & (Pen.Prescribed.Well.Doc == T)
+          ) |
+          ((Pen.Prescribed == F &
+              Genta.Prescribed == T) & (Genta.Prescribed.Well.Doc == T)
+          ),
+        T,
+        F)]
+
+Dataset %<>%
+  dplyr::rename(
+    Genta.Dose.Orig = genta_dose,
+    Genta.Freq.Orig = genta_freq,
+    Genta.Route.Orig = genta_route,
+  )
+
+Dataset %<>%
+  dplyr::rename(
+    Pen.Dose.Orig = pen_dose_mg,
+    Pen.Freq.Orig = pen_freq,
+    Pen.Route.Orig = pen_route,
+  )
+
+```
+
+
+
+## Supportive Care
+```{r message=FALSE, warning=FALSE}
+
+Dataset %<>%
+  dplyr::mutate(
+    
+    # CPAP
+    CPAP = ifelse(!is.na(CPAP), ifelse(CPAP == "Yes", T, F), NA),
+    CPAP.Start.Time = cpap_start_time,
+    CPAP.End.Time = cpap_end_time,
+    
+    # KMC
+    KMC = ifelse(!is.na(KMC), ifelse(KMC == "Yes", T, F), NA),
+    )
+
+
+Dataset[!is.na(Birth.Weight.Below.2kg) & !is.na(KMC) & KMC == T, 
+        KMC.2kgs := ifelse(Birth.Weight.Below.2kg == T, T, F)]
+
+
+# RDS Diagnosis for CPAP
+Dataset[, Clinical.Diagnosis.RDS := 
+          ifelse(`Discharge.Diagnose.Respiratory Distress Syndrome` == T | 
+                   `Admit.Diagnose.Respiratory Distress Syndrome`, T,F) ]
+
+Dataset[Clinical.Diagnosis.RDS == T, CPAP.RDS:= ifelse(CPAP == T, T, F)]
+
+Dataset[Born.Before.Arrival == F, APGAR.Inborn.Known := ifelse(
+  Apgar.Recorded == T, T, F)]
+
+```
+
+
+## Monitoring Data
+### Inpatient Weight Data
+```{r warning=FALSE, message=FALSE}
+
+Weight.Data <- Dataset %>% dplyr::select(
+  key,
+  starts_with("weight"),
+  -Weight.Now, -Weight.Group, -weight_doc) %>%
+  dplyr::filter(!is.na(Weight.Monitoring.Recorded)) %>%
+  dplyr::select(-Weight.Monitoring.Recorded)
+
+Weight.Data.Units <- Weight.Data %>% dplyr::select(key, contains("units")) %>% 
+  tidyr::pivot_longer(!key, names_to = "Units", values_to = "Value") %>%
+  dplyr::mutate(
+    Iteration = as.integer(stringr::str_extract(Units,"\\d+"))
+  ) %>%
+  dplyr::select(-Units) %>% dplyr::rename(Units = Value)
+
+Weight.Data.Values <- Weight.Data %>% dplyr::select(key, !contains("units")) %>% 
+  tidyr::pivot_longer(!key, names_to = "Units", values_to = "Value") %>%
+  dplyr::mutate(
+    Iteration = as.integer(stringr::str_extract(Units,"\\d+"))
+  ) %>%
+  dplyr::select(-Units)
+
+Weight.Dataset <- merge(Weight.Data.Units, 
+                        Weight.Data.Values, 
+                        by = c("key", "Iteration"))
+
+Weight.Data.Dates <- Dataset %>% dplyr::select(
+  key,
+  Weight.Monitoring.Recorded,
+  starts_with("date")) %>%
+  dplyr::select(key, Weight.Monitoring.Recorded, matches("\\d$")) %>%
+  dplyr::filter(!is.na(Weight.Monitoring.Recorded)) %>%
+  dplyr::select(-Weight.Monitoring.Recorded) %>%
+  tidyr::pivot_longer(!key, names_to = "Monitoring.Date", values_to = "Value") %>%
+  dplyr::mutate(
+    Iteration = as.integer(stringr::str_extract(Monitoring.Date,"\\d+"))
+  ) %>%
+   dplyr::select(-Monitoring.Date) %>% dplyr::rename(Monitoring.Date = Value)
+
+Weight.Dataset <- merge(Weight.Dataset, 
+                        Weight.Data.Dates, 
+                        by = c("key", "Iteration"))
+
+saveRDS(Weight.Dataset, "Inpatient_Weight_Monitoring.rds")
+
+
+Weight.Monitoring.Counts <- Weight.Dataset %>%
+  dplyr::group_by(key) %>%
+  dplyr::summarise(
+    Times.Weight.Monitored = sum(!is.na(Value)),
+    Times.Weight.Monitored.Multiple = ifelse(Times.Weight.Monitored > 1, T, F)
+  )
+
+Dataset <- merge(Dataset, Weight.Monitoring.Counts, by = "key", all.x = T)
+```
+
+
+### Post-discharge weight data
+```{r warning=FALSE, message=FALSE}
+
+Discharge.Weight.Units <- Dataset %>% dplyr::select(
+  key, starts_with("post_weight_unit")) %>% 
+  tidyr::pivot_longer(!key, names_to = "Units", values_to = "Value") %>%
+  dplyr::mutate(
+    Iteration = as.integer(stringr::str_extract(Units,"\\d+"))
+  ) %>%
+  dplyr::select(-Units) %>% dplyr::rename(Units = Value)
+
+Discharge.Weight.Data <- Dataset %>% dplyr::select(
+  key, starts_with("postdischarge_weight_")) %>%  
+  tidyr::pivot_longer(!key, names_to = "Units", values_to = "Value") %>%
+  dplyr::mutate(
+    Iteration = as.integer(stringr::str_extract(Units,"\\d+"))
+  ) %>%
+  dplyr::select(-Units)
+
+Discharge.Weight.Dataset <- merge(Discharge.Weight.Units, 
+                        Discharge.Weight.Data, 
+                        by = c("key", "Iteration"))
+
+Discharge.Weight.Dates <- Dataset %>% dplyr::select(
+  key, starts_with("post_weight_date")) %>%
+  tidyr::pivot_longer(!key, names_to = "Monitoring.Date", values_to = "Value") %>%
+  dplyr::mutate(
+    Iteration = as.integer(stringr::str_extract(Monitoring.Date,"\\d+"))
+  ) %>%
+   dplyr::select(-Monitoring.Date) %>% dplyr::rename(Monitoring.Date = Value)
+
+Discharge.Weight.Dataset <- merge(Discharge.Weight.Dataset, 
+                                  Discharge.Weight.Dates,
+                                  by = c("key", "Iteration"))
+
+saveRDS(Discharge.Weight.Dataset, "Discharge_Weight_Monitoring.rds")
+
+```
+
+Get a subset of columns for the analysis
+
+```{r warning=F, message=F}
+
+Analysis.Dataset <- Dataset %>%
+  dplyr::select(
+    key,
+    Hospital,
+    MinimumDataset,
+    SENSS_NETS_Derivation,
+    SENSS_NETS_Validation,
+    
+    # Demographics
+    Male,
+    Age,
+    Gestational.Age,
+    Gestational.Group,
+    Birth.Weight,
+    Birth.Weight.Below.2kg,
+    Weight.Group,
+    
+    # Admission information
+    NAR.Use.Recorded,
+    Birth.DateTime,
+    Admission.DateTime,
+    Weight.Now,
+    date_adm,
+    Delivery,
+    Apgar.Score.5min,
+    contains("Admit.Diagnose."), # Admission diagnoses
+    Admission.Diagnosis.Count,
+    
+    # Discharge information
+    Discharge.DateTime,
+    date_discharge,
+    Discharge.Weight,
+    Outcome,
+    contains("Discharge.Diagnose."), # Discharge diagnoses
+    Discharge.Diagnosis.Count,
+    
+    
+    # Maternal Information
+    Maternal.Age,
+    Maternal.HIV,
+    Maternal.VRDL,
+    Maternal.Gravidity,
+    Maternal.Parity,
+    
+    # Presenting complaints
+    Temparature,
+    Temp.Group,
+    Fever,
+    Convulsions,
+    Difficulty.Breathing,
+    Difficulty.Feeding,
+    Vomiting,
+    Apnoea,
+    
+    
+    # Cardinal signs on examination 
+    Grunting,
+    Central.Cyanosis,
+    Bulging.Fontanelle,
+    Floppy,
+    
+    
+    # Other physical examination
+    
+    ## Breathing
+    Bilateral.Air.Entry,
+    Crackles,
+    Indrawing,
+    
+    ## Circulation
+    Capillary.Refill,
+    Slow.Capillary.Refill,
+    Pallor.Anaemia,
+    
+    ## Other
+    Eye.Pus.Infection,
+    Umbilical.Infection,
+    Skin.Rushes,
+    Irritable,
+    Jaundice,
+    Gestational.Size,
+    Glucose.Ordered,
+    Glucose.Order.Unable.Breastfeed, # QoC variable
+    
+    
+    # Treatment
+    Treatment.Sheet.Present,
+    Genta.Prescribed,
+    Genta.Prescribed.Well.Doc,
+    Genta.Profile,
+    Genta.Dose.Kg,
+    Genta.Dose, # QoC variable
+    Genta.Dose.Orig,
+    Genta.Freq.Orig,
+    Genta.Route.Orig,
+    Pen.Prescribed,
+    Pen.Dose.Orig,
+    Pen.Freq.Orig,
+    Pen.Route.Orig,
+    Pen.Prescribed.Well.Doc,
+    Pen.Profile,
+    Pen.Dose.Kg,
+    Pen.Dose,  # QoC variable
+    Antibiotics.Prescribed,
+    Antibiotics.Prescribed.Admission,
+    Antibiotic.Prescription.Well.Doc,
+    Oxygen.Prescribed,
+    Oxygen.Prescribed.Admission,
+    Phenobarbital.Prescribed,
+    
+    # Fluids
+    Fluids.Prescribed,
+    Fluids.Prescribed.Admission,
+    Fluids.Duration,
+    Fluids.Volume,
+    Fluids.Dose, # QoC variable 
+    
+    # Feeds
+    Feeds.Prescribed,
+    Feeds.Prescribed.Admission,
+    Feeds.Route,
+    Feeds.Frequency,
+    Feeds.Volume,
+    Feeds.Dose, # QoC variable
+    
+    # Monitoring
+    Weight.Monitoring.Recorded,
+    Times.Weight.Monitored.Multiple, # QoC variable
+    Vitals.Pulse.Rate.Recorded,
+    Vitals.Temp.Recorded,
+    Vitals.Pulse.Oximetry.Recorded,
+    Vitals.Respiratory.Rate.Recorded,
+    
+    #Vitals Count
+    Vitals.Pulse.Rate.Count,
+    Vitals.Respiratory.Rate.Count,
+    Vitals.Temp.Count,
+    Vitals.Pulse.Oximetry.Count,
+    Vitals.Cyanosis.Count,
+    
+    
+    # Supportive Care
+    CPAP,
+    CPAP.RDS, # QoC variable
+    KMC,
+    KMC.2kgs, # QoC variable
+    Apgar.Recorded,
+    APGAR.Inborn.Known, # QoC variable
+    
+    
+    ## Necessary for other analysis
+    Clinical.Diagnosis.RDS,
+    Can.Suck.Breastfeed,
+    Referral.Status,
+    Born.Before.Arrival,
+    HIV,
+    Oxygen.Sat,
+    Oxygen.Sat.Group,
+    LOS,
+    LOS.Group,
+    Date.Valid
+  )
+setnames(Analysis.Dataset, c("date_adm","date_discharge"),c("Admission_Date", 
+                                                            "Discharge_Date"))
+
+replace.empty.with.na <- function(column){
+  if(lubridate::is.Date(column)| 
+     lubridate::is.POSIXct(column) | 
+     lubridate::is.POSIXlt(column)){
+    return(column)
+  }else{
+    column[column == "Empty"] <- NA
+    column[column == "empty"] <- NA
+    return(column)
+  }
+}
+Analysis.Dataset <- Analysis.Dataset[,lapply(.SD, replace.empty.with.na)]
+
+write.csv(Analysis.Dataset, "analysis.csv",row.names = F)
+
+```
+
+
+
