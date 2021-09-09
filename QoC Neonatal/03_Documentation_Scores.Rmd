@@ -37,6 +37,8 @@ cat(paste0("\n\nObservations captured admissions between: 01 April 2014 and ",
            format(max(Dataset$Admission_Date), "%d %B, %Y"),": ", rows.after.exclude.two))
 ```
 
+
+
 \newpage
 
 ```{r echo=FALSE, warning=FALSE, message=FALSE, fig.pos='H', comment = NA}
@@ -594,9 +596,43 @@ if(!file.exists("Documentation_Score.rds")){
 ```
 
 
+```{r echo=FALSE, warning=FALSE, message=FALSE, comment = NA}
+
+  # Analysis.Dataset.History - Original dataset you are using
+# Hospital - Hospital variable
+# Admission_Date - The date of admission per variable
+
+TimerTable <- Dataset %>%
+  dplyr::select(Hospital, Admission_Date) %>%
+  dplyr::mutate(
+    Report_Month = as.Date(zoo::as.yearmon(Admission_Date)),
+    Counter = 1
+  ) %>%
+  dplyr::select(-Admission_Date) %>%
+  unique() %>%
+  dplyr::filter(
+    Report_Month != as.Date("2020-12-01", format = "%Y-%m-%d")
+  ) %>%
+  dplyr::group_by(Hospital) %>%
+  dplyr::mutate(Time = order_by(Report_Month,cumsum(Counter))) %>%
+  dplyr::select(-Counter) %>%
+  dplyr::arrange(Hospital, Report_Month, Time)
+
+# Combine to original dataset
+
+Update.Dataset <- Dataset %>%
+  dplyr::mutate(Report_Month = as.Date(zoo::as.yearmon(Admission_Date))) %>%
+  merge(., TimerTable, by = c("Hospital", "Report_Month"))
+        
+# The variable of interest is Update.Dataset$Time
+
+
+  
+```
+
 
 ```{r echo=FALSE, warning=FALSE, message=FALSE, fig.pos='H', comment = NA}
-Validate_Scores <- Dataset %>%
+Validate_Scores <- Update.Dataset %>%
   dplyr::select(
     key,
     Hospital,
@@ -670,7 +706,8 @@ Validate_Scores <- Dataset %>%
     KMC,
     Birth.Weight.Below.2kg,
     Apgar.Recorded,
-    Born.Before.Arrival
+    Born.Before.Arrival,
+    Time
   ) %>%
   merge(Documentation.Score, by = "key")
 saveRDS(Validate_Scores, "Scores.rds")
@@ -681,29 +718,31 @@ saveRDS(Validate_Scores, "Scores.rds")
 ```{r echo=FALSE, warning=FALSE, message=FALSE, fig.pos='H', comment = NA}
 plot.Demographics <- Validate_Scores %>%
   dplyr::filter(!(Hospital %in% c("Bondo DH", "Karatina District Hospital"))) %>%
+  
   dplyr::filter(!(Admission.DateTime < as.Date("2018-01-01", formart = "%Y-%m-%d"))) %>%
-  dplyr::mutate(
-    Month.Year = lubridate::as_date(zoo::as.yearqtr(Admission.DateTime))
-  ) %>%
-  dplyr::group_by(Hospital, Month.Year) %>%
+ # dplyr::mutate(
+  # Month.Year = #lubridate::as_date(zoo::as.yearqtr(Admission.DateTime))
+ # ) %>%
+  dplyr::group_by(Hospital, Time) %>%
   dplyr::summarise(
     `Score` = sum(Demographics, na.rm = T),
     `Denominator` = sum(Denom.Demographics, na.rm = T),
     `Rate` = round(Score/Denominator,4)
   ) %>%
+   
   dplyr::ungroup() 
 plot.Demographics %>% ggplot() +
-  geom_point(aes(x = Month.Year, y = Rate, group = Hospital, color = Hospital)) +
+  geom_point(aes(x = Time, y = Rate, group = Hospital, color = Hospital)) +
   ggsci::scale_color_d3(palette = "category20b") + 
-  geom_smooth(aes(x = Month.Year, y = Rate), data = plot.Demographics, method = "loess", formula = 'y ~ x') +
+  geom_smooth(aes(x = Time, y = Rate), data = plot.Demographics, method = "loess", formula = 'y ~ x') +
   scale_y_continuous(labels = scales::percent, breaks =seq(0,1,.2), limits =c(0,1)) +
-  scale_x_date(date_labels = "%b\n%Y",
-               breaks = function(x) seq.Date(from = min(x), to = max(x), by = "6 months"),
-               minor_breaks = function(x) seq.Date(from = min(x), to = max(x), by = "3 months"),
-               limits = function(x) c(min(x)- months(1), max(x) + months(1)),
-               expand = c(0.0, 0)) +
+ # scale_x_date(date_labels = "%b\n%Y",
+  #             breaks = function(x) seq.Date(from = #min(x), to = max(x), by = "6 months"),
+ #              minor_breaks = function(x) seq.Date(from #= min(x), to = max(x), by = "3 months"),
+               #limits = function(x) c(min(x)- months(1), #max(x) + months(1)),
+               #expand = c(0.0, 0)) +
   theme_minimal(base_family = "Corbel") +
-  labs(x= "Calendar Date", 
+  labs(x= "Time", 
        y= "Percentage Documentation", 
        title= "Demographics",
        caption = "Each unique colour-coded point represents an individual hospital") +
@@ -711,9 +750,10 @@ plot.Demographics %>% ggplot() +
   theme(plot.title = element_text(hjust = 0.5))
   demog<-c("Male",
                                 "Age",
-                               "Gestational Age",
-                               "Birth Weight")
-  knitr::kable(demog,"simple",caption="Variables included")
+                               "Gestational age",
+                               "Birth weight")
+knitr::kable(demog,caption="Variables",col.names = NULL)%>%
+    kable_styling(bootstrap_options = "striped")
 
 
 ```
@@ -724,41 +764,41 @@ plot.Demographics %>% ggplot() +
 plot.admission.information <- Validate_Scores %>%
   dplyr::filter(!(Hospital %in% c("Bondo DH", "Karatina District Hospital"))) %>%
   dplyr::filter(!(Admission.DateTime < as.Date("2018-01-01", formart = "%Y-%m-%d"))) %>%
-  dplyr::mutate(
-    Month.Year = lubridate::as_date(zoo::as.yearqtr(Admission.DateTime))
-  ) %>%
-  dplyr::group_by(Hospital, Month.Year) %>%
+  #dplyr::mutate(
+    #Month.Year = #lubridate::as_date(zoo::as.yearqtr(Admission.DateTime))
+  #) %>%
+  dplyr::group_by(Hospital, Time) %>%
   dplyr::summarise(
     `Score` = sum( `Admission Information`, na.rm = T),
     `Denominator` = sum(`Denom.Admission Information`, na.rm = T),
     `Rate` = round(Score/Denominator,4)) %>%
   dplyr::ungroup() 
 plot.admission.information %>% ggplot() +
-  geom_point(aes(x = Month.Year, y = Rate, group = Hospital, color = Hospital)) +
+  geom_point(aes(x = Time, y = Rate, group = Hospital, color = Hospital)) +
   ggsci::scale_color_d3(palette = "category20b") + 
-  geom_smooth(aes(x = Month.Year, y = Rate), data = plot.admission.information, method = "loess", formula = 'y ~ x') +
+  geom_smooth(aes(x = Time, y = Rate), data = plot.admission.information, method = "loess", formula = 'y ~ x') +
   scale_y_continuous(labels = scales::percent, breaks =seq(0,1,.2), limits =c(0.,1)) +
-  scale_x_date(date_labels = "%b\n%Y",
-               breaks = function(x) seq.Date(from = min(x), to = max(x), by = "6 months"),
-               minor_breaks = function(x) seq.Date(from = min(x), to = max(x), by = "3 months"),
-               limits = function(x) c(min(x)- months(1), max(x) + months(1)),
-               expand = c(0.0, 0)) +
+ # scale_x_date(date_labels = "%b\n%Y",
+  #             breaks = function(x) seq.Date(from = #min(x), to = max(x), by = "6 months"),
+ #              minor_breaks = function(x) seq.Date(from #= min(x), to = max(x), by = "3 months"),
+              # limits = function(x) c(min(x)- months(1), #max(x) + months(1)),
+             #  expand = c(0.0, 0)) +
   theme_minimal(base_family = "Corbel") +
-  labs(x= "Calendar Date", 
+  labs(x= "Time", 
        y= "% Documentation", 
        title= "Admission Information",
        caption = "Each unique colour-coded point represents an individual hospital") +
   theme(legend.position = "none")+
   theme(plot.title = element_text(hjust = 0.5))
-  admissions.list<-Validate_Scores%>%select(NAR.Use.Recorded,
-      Birth.DateTime,
-      Admission.DateTime,
-      Weight.Now,
-      Delivery,
-      Apgar.Score.5min,
-      Admission.Diagnosis.Count)
-names(admissions.list) <- gsub(".", "  ", names(admissions.list), fixed = TRUE)
- knitr::kable(names(admissions.list),"simple",caption="Variables included")
+  admissions.list<-c("NAR use recorded",
+      "Birth date and time",
+      "Admission date and time",
+      "Weight now",
+      "Delivery",
+      "Apgar score at 5 minutes",
+      "Admission diagnosis count")
+ knitr::kable(admissions.list,caption="Variables",col.names =NULL)%>%
+    kable_styling(bootstrap_options = "striped")
 
       
 ```
@@ -795,12 +835,13 @@ plot.discharge.information %>% ggplot() +
        caption = "Each unique colour-coded point represents an individual hospital") +
   theme(legend.position = "none")+
   theme(plot.title = element_text(hjust = 0.5))
-  discharge.list<-Validate_Scores%>%select(Discharge.DateTime,
-      Discharge.Weight,
-      Outcome,
-      Discharge.Diagnosis.Count)
-      names(discharge.list) <- gsub(".", "  ", names(discharge.list), fixed = TRUE)
- knitr::kable(names(discharge.list),"simple",caption="Variables included")
+  discharge.list<-c("Discharge date and time",
+      "Discharge weight",
+      "Outcome",
+     " Discharge diagnosis count")
+      
+ knitr::kable(discharge.list,caption="Variables",col.names = NULL)%>%
+    kable_styling(bootstrap_options = "striped")
 
 ```
 
@@ -839,11 +880,12 @@ plot.Maternal.history %>% ggplot() +
   maternal.list<-c( "Maternal Age",
       "Maternal HIV",
       "Maternal VRDL",
-      "Maternal Gravidity",
-     " Maternal Parity",
-      "Gestational Size")
+      "Maternal gravidity",
+     " Maternal parity",
+      "Gestational size")
 
- knitr::kable(maternal.list,"simple",caption="Variables included")
+ knitr::kable(maternal.list,caption="Variables",col.names = NULL)%>%
+    kable_styling(bootstrap_options = "striped")
 
 ```
 
@@ -881,15 +923,16 @@ plot.presenting.complains %>% ggplot() +
   complaints.cardinal.list<-c("Temparature",
       "Fever",
      " Convulsions",
-      "Difficulty Breathing",
-      "Difficulty Feeding",
+      "Difficulty breathing",
+      "Difficulty feeding",
      " Vomiting",
       "Apnoea",
       "Grunting",
-      "Central Cyanosis",
-     " Bulging Fontanelle",
+      "Central cyanosis",
+     " Bulging fontanelle",
       "Floppy")
-   knitr::kable(complaints.cardinal.list,"simple",caption="Variables included")
+   knitr::kable(complaints.cardinal.list,caption="Variables", col.names = NULL)%>%
+    kable_styling(bootstrap_options = "striped")
 
 ```
 
@@ -927,18 +970,19 @@ plot.other.signs %>% ggplot() +
   theme(legend.position = "none")+
   theme(plot.title = element_text(hjust = 0.5))
 other.signs.list<-c("Can Suck or Breastfeed",
-      "Bilateral Air Entry",
+      "Bilateral air entry",
       "Crackles",
       "Indrawing",
-      "Capillary Refill",
-      "Pallor Anaemia",
-      "Eye Pus Infection",
-      "Umbilical Infection",
-      "Skin Rushes",
+      "Capillary refill",
+      "Pallor anaemia",
+      "Eye pus infection",
+      "Umbilical infection",
+      "Skin rushes",
       "Irritable",
       "Jaundice",
-      "Glucose Test Ordered")
-   knitr::kable(other.signs.list,"simple",caption="Variables included")
+      "Glucose test ordered")
+   knitr::kable(other.signs.list,caption="Variables",col.names = NULL)%>%
+    kable_styling(bootstrap_options = "striped")
 
       
 ```
@@ -975,12 +1019,13 @@ plot.treatment %>% ggplot() +
   theme(legend.position = "none")+
   theme(plot.title = element_text(hjust = 0.5))
 treatment.list<-c( "Age",
-      "Birth Weight",
-      "Antibiotic Prescribed",
+      "Birth weight",
+      "Antibiotic prescribed",
       "Dosage",
-      "Frequency of Adminstration",
-      "Route of Adminstration")
-  knitr::kable(treatment.list,"simple",caption="Variables included")
+      "Frequency of adminstration",
+      "Route of adminstration")
+  knitr::kable(treatment.list,caption="Variables",col.names = NULL)%>%
+    kable_styling(bootstrap_options = "striped")
 ```
 #Dosage was calculated using the formula Dosage = dose prescribed/weight
 #Penicilin Under dose -  a prescription of less than 40,000iu/kg
@@ -1025,12 +1070,13 @@ plot.fluids %>% ggplot() +
   theme(legend.position = "none")+
   theme(plot.title = element_text(hjust = 0.5))
   fluids.list<-c("Age",
-      "Birth Weight",
-      "Fliuds Prescribed",
+      "Birth weight",
+      "Fliuds prescribed",
       "Volume",
-      "Frequency of Adminstration",
-      "Route of Adminstration")
-      knitr::kable(fluids.list,"simple",caption="Variables included")
+      "Frequency of adminstration",
+      "Route of adminstration")
+      knitr::kable(fluids.list,caption="Variables",col.names = NULL)%>%
+    kable_styling(bootstrap_options = "striped")
 ```
 
 
@@ -1066,12 +1112,13 @@ plot.feeds %>% ggplot() +
   theme(legend.position = "none")+
   theme(plot.title = element_text(hjust = 0.5))
    feeds.list<-c("Age",
-      "Birth Weight",
-      "Feeds Prescribed",
+      "Birth weight",
+      "Feeds prescribed",
       "Volume",
-      "Frequency of Adminstration",
-      "Route of Adminstration")
-      knitr::kable(fluids.list,"simple",caption="Variables included")
+      "Frequency of adminstration",
+      "Route of adminstration")
+      knitr::kable(fluids.list,caption="Variables",col.names = NULL)%>%
+    kable_styling(bootstrap_options = "striped")
 ```
 
 
@@ -1106,6 +1153,14 @@ plot.monitoring %>% ggplot() +
        caption = "Each unique colour-coded point represents an individual hospital") +
   theme(legend.position = "none")+
   theme(plot.title = element_text(hjust = 0.5))
+Vitals.list<-c("Weight monitoring recorded",
+      "Number of times weight is monitored",
+    "Pulse rate recorded",
+      "Tempereture recorded",
+      "Pulse oximetry recorded",
+      "Respiratory rate recorded")
+      knitr::kable(Vitals.list,caption="Variables",col.names = NULL)%>%
+    kable_styling(bootstrap_options = "striped")
 ```
 
 
@@ -1141,10 +1196,11 @@ plot.supportive.care %>% ggplot() +
   theme(legend.position = "none")+
   theme(plot.title = element_text(hjust = 0.5))
    fluids.list<-c("CPAP",
-      "Clinical Diagnosis",
-      "Kangaroo Mother Care",
-      "Birth Weight Below 2kg",
-      "Apgar Score Recorded",
-      "Born Before Arrival")
-      knitr::kable(fluids.list,"simple",caption="Variables included")
+      "Clinical diagnosis",
+      "Kangaroo mother care",
+      "Birth weight below 2kg",
+      "Apgar score recorded",
+      "Born before arrival")
+      knitr::kable(fluids.list,caption="Variables",col.names = NULL)%>%
+    kable_styling(bootstrap_options = "striped")
 ```

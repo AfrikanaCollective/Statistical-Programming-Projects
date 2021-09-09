@@ -2,7 +2,7 @@
 ## CIN-N Morbidity & Mortality
 
 ```{r echo=FALSE, warning=FALSE, message=FALSE, fig.pos='H', comment = NA}
-
+setwd("C:/Users/dchelangat/Downloads")
 Dataset <- data.table(read_csv("analysis.csv",guess_max = 80000, col_types = cols()))
 Dataset[ , key := .I]
 setkey(Dataset,key)
