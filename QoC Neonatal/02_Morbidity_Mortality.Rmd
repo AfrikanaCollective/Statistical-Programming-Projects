@@ -1,4 +1,6 @@
-
+library(ggsci)
+library(ggforce)
+library(foreach)
 ## CIN-N Morbidity & Mortality
 
 ```{r echo=FALSE, warning=FALSE, message=FALSE, fig.pos='H', comment = NA}
@@ -905,6 +907,7 @@ foreach::registerDoSEQ()
 
 
 results_adm <- as.data.frame(finalMatrix)
+results_adm$Diagnoses<-as.factor(results_adm$Diagnoses)
 
 results_adm %>%
   tidyr::spread(key = Diagnoses, value = Proportion, fill = 0) %>%
@@ -912,7 +915,8 @@ results_adm %>%
   dplyr::arrange(`Calendar Date`, Diagnoses) %>%
   ggplot(aes(x = `Calendar Date`, y = Proportion, fill = Diagnoses)) +
   geom_area(stat = "identity") + 
-  ggsci::scale_fill_d3() +
+  #ggsci::scale_fill_d3(palette="category10") +
+   scale_fill_manual(values = c("blue", "orange", "seagreen3","red","purple"))+
   scale_y_continuous(labels = scales::percent, breaks =seq(0,1,.2), limits =c(0,1)) +
   scale_x_date(date_labels = "%b\n%Y",
                breaks = function(x) seq.Date(from = min(x), to = max(x), by = "6 months"),
@@ -923,7 +927,7 @@ results_adm %>%
   labs(x= "Calendar Date", 
        y= "Admissions with diagnosis (%)", 
        title= "Admission diagnoses over time",
-       subtitle = "Top 4 diagnoses") +
+       subtitle = "Top diagnoses") +
   theme(legend.position = "bottom") +
   guides(fill=guide_legend(nrow=3, byrow=TRUE))
 
@@ -1009,15 +1013,16 @@ rm(cl)
 foreach::registerDoSEQ()
 
 results <- as.data.frame(finalMatrix)
-
+results$Diagnoses<-as.factor(results$Diagnoses)
 results %>%
   tidyr::drop_na() %>%
   tidyr::spread(key = Diagnoses, value = Proportion, fill = 0) %>%
   tidyr::gather(key = Diagnoses, value = Proportion, - `Calendar Date`) %>%
   dplyr::arrange(`Calendar Date`, Diagnoses) %>%
-  ggplot(aes(x = `Calendar Date`, y = Proportion, fill = Diagnoses)) +
+  ggplot(aes(x = `Calendar Date`, y = Proportion, fill =Diagnoses)) +
   geom_area(stat = "identity") + 
-  ggsci::scale_fill_d3() +
+  #ggsci::scale_fill_d3(palette="category10") +
+   scale_fill_manual(values = c("blue", "orange","brown","seagreen3","red" ,"purple","violet"))+
   scale_y_continuous(labels = scales::percent, breaks =seq(0,1,.2), limits =c(0,1)) +
   scale_x_date(date_labels = "%b\n%Y",
                breaks = function(x) seq.Date(from = min(x), to = max(x), by = "6 months"),
@@ -1028,8 +1033,9 @@ results %>%
   labs(x= "Calendar Date", 
        y= "Discharge with diagnosis (%)", 
        title= "Discharge diagnoses over time",
-       subtitle = "Top 4 diagnoses") +
+       subtitle = "Top diagnoses") +
   theme(legend.position = "bottom") +
+   
   guides(fill=guide_legend(nrow=3, byrow=TRUE))
 
 ```
