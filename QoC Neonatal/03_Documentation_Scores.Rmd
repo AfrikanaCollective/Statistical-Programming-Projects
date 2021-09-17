@@ -18,7 +18,7 @@ library(extrafont)
 ## CIN-Neonatal Documentation Scores
 
 ```{r echo=FALSE, warning=FALSE, message=FALSE, fig.pos='H', comment = NA}
-setwd("C:/Users/dchelangat/Downloads")
+
 Dataset <- data.table(read_csv("analysis.csv",guess_max = 80000, col_types = cols()))
 Dataset[ , key := .I]
 setkey(Dataset,key)
@@ -809,27 +809,27 @@ plot.admission.information %>% ggplot() +
 plot.discharge.information <- Validate_Scores %>%
   dplyr::filter(!(Hospital %in% c("Bondo DH", "Karatina District Hospital"))) %>%
   dplyr::filter(!(Admission.DateTime < as.Date("2018-01-01", formart = "%Y-%m-%d"))) %>%
-  dplyr::mutate(
-    Month.Year = lubridate::as_date(zoo::as.yearqtr(Admission.DateTime))
-  ) %>%
-  dplyr::group_by(Hospital, Month.Year) %>%
+  #dplyr::mutate(
+  # Month.Year = lubridate::as_date(zoo::as.yearqtr(Admission.DateTime))
+ # ) %>%
+  dplyr::group_by(Hospital, Time) %>%
   dplyr::summarise(
     `Score` = sum( `Discharge Information`, na.rm = T),
     `Denominator` = sum(`Denom.Discharge Information`, na.rm = T),
     `Rate` = round(Score/Denominator,4)) %>%
   dplyr::ungroup() 
 plot.discharge.information %>% ggplot() +
-  geom_point(aes(x = Month.Year, y = Rate, group = Hospital, color = Hospital)) +
+  geom_point(aes(x = Time, y = Rate, group = Hospital, color = Hospital)) +
   ggsci::scale_color_d3(palette = "category20b") + 
-  geom_smooth(aes(x = Month.Year, y = Rate), data = plot.discharge.information, method = "loess", formula = 'y ~ x') +
+  geom_smooth(aes(x = Time, y = Rate), data = plot.discharge.information, method = "loess", formula = 'y ~ x') +
   scale_y_continuous(labels = scales::percent, breaks =seq(0,1,.2), limits =c(0.,1)) +
-  scale_x_date(date_labels = "%b\n%Y",
-               breaks = function(x) seq.Date(from = min(x), to = max(x), by = "6 months"),
-               minor_breaks = function(x) seq.Date(from = min(x), to = max(x), by = "3 months"),
-               limits = function(x) c(min(x)- months(1), max(x) + months(1)),
-               expand = c(0.0, 0)) +
+  #scale_x_date(date_labels = "%b\n%Y",
+             #  breaks = function(x) seq.Date(from = min(x), to = #max(x), by = "6 months"),
+              # minor_breaks = function(x) seq.Date(from = min(x), to = #max(x), by = "3 months"),
+             #  limits = function(x) c(min(x)- months(1), max(x) + #months(1)),
+              # expand = c(0.0, 0)) +
   theme_minimal(base_family = "Corbel") +
-  labs(x= "Calendar Date", 
+  labs(x= "Time", 
        y= "Percentage Documentation", 
        title= "Discharge Information",
        caption = "Each unique colour-coded point represents an individual hospital") +
@@ -850,28 +850,28 @@ plot.discharge.information %>% ggplot() +
 plot.Maternal.history <- Validate_Scores %>%
   dplyr::filter(!(Hospital %in% c("Bondo DH", "Karatina District Hospital"))) %>%
   dplyr::filter(!(Admission.DateTime < as.Date("2018-01-01", formart = "%Y-%m-%d"))) %>%
-  dplyr::mutate(
-    Month.Year = lubridate::as_date(zoo::as.yearqtr(Admission.DateTime))
-  ) %>%
-  dplyr::group_by(Hospital, Month.Year) %>%
+ # dplyr::mutate(
+#  Month.Year = lubridate::as_date(zoo::as.yearqtr(Admission.DateTime))
+# ) %>%
+  dplyr::group_by(Hospital, Time) %>%
   dplyr::summarise(
     `Score` = sum( `Maternal History`, na.rm = T),
     `Denominator` = sum(`Denom.Maternal History`, na.rm = T),
     `Rate` = round(Score/Denominator,4)) %>%
   dplyr::ungroup() 
 plot.Maternal.history %>% ggplot() +
-  geom_point(aes(x = Month.Year, y = Rate, group = Hospital, color = Hospital)) +
+  geom_point(aes(x = Time, y = Rate, group = Hospital, color = Hospital)) +
   ggsci::scale_color_d3(palette = "category20b") + 
-  geom_smooth(aes(x = Month.Year, y = Rate), data = plot.Maternal.history, method = "loess", formula = 'y ~ x') +
+  geom_smooth(aes(x = Time, y = Rate), data = plot.Maternal.history, method = "loess", formula = 'y ~ x') +
   scale_y_continuous(labels = scales::percent, breaks =seq(0,1,.2), limits =c(0,1)) +
-  scale_x_date(date_labels = "%b\n%Y",
-               breaks = function(x) seq.Date(from = min(x), to = max(x), by = "6 months"),
-               minor_breaks = function(x) seq.Date(from = min(x), to = max(x), by = "3 months"),
-               limits = function(x) c(min(x)- months(1), max(x) + months(1)),
-               expand = c(0.0, 0)) +
+  #scale_x_date(date_labels = "%b\n%Y",
+             # breaks = function(x) seq.Date(from = min(x), to = max(x), #by = "6 months"),
+            #   minor_breaks = function(x) seq.Date(from = min(x), to = #max(x), by = "3 months"),
+             #  limits = function(x) c(min(x)- months(1), max(x) + #months(1)),
+            #   expand = c(0.0, 0)) +
   theme_minimal(base_family = "Corbel") +
-  labs(x= "Calendar Date", 
-       y= "Percentage Documentation", 
+  labs(x= "Time", 
+     y= "Percentage Documentation", 
        title= "Maternal History",
        caption = "Each unique colour-coded point represents an individual hospital") +
   theme(legend.position = "none")+
@@ -894,27 +894,27 @@ plot.Maternal.history %>% ggplot() +
 plot.presenting.complains <- Validate_Scores %>%
   dplyr::filter(!(Hospital %in% c("Bondo DH", "Karatina District Hospital"))) %>%
   dplyr::filter(!(Admission.DateTime < as.Date("2018-01-01", formart = "%Y-%m-%d"))) %>%
-  dplyr::mutate(
-    Month.Year = lubridate::as_date(zoo::as.yearqtr(Admission.DateTime))
-  ) %>%
-  dplyr::group_by(Hospital, Month.Year) %>%
+  #dplyr::mutate(
+   #Month.Year = lubridate::as_date(zoo::as.yearqtr(Admission.DateTime))
+ # ) %>%
+  dplyr::group_by(Hospital, Time) %>%
   dplyr::summarise(
     `Score` = sum( `Presenting Complaints`, na.rm = T),
     `Denominator` = sum(`Denom.Presenting Complaints`, na.rm = T),
     `Rate` = round(Score/Denominator,4)) %>%
   dplyr::ungroup() 
 plot.presenting.complains %>% ggplot() +
-  geom_point(aes(x = Month.Year, y = Rate, group = Hospital, color = Hospital)) +
+  geom_point(aes(x = Time, y = Rate, group = Hospital, color = Hospital)) +
   ggsci::scale_color_d3(palette = "category20b") + 
-  geom_smooth(aes(x = Month.Year, y = Rate), data = plot.presenting.complains, method = "loess", formula = 'y ~ x') +
+  geom_smooth(aes(x = Time, y = Rate), data = plot.presenting.complains, method = "loess", formula = 'y ~ x') +
   scale_y_continuous(labels = scales::percent, breaks =seq(0,1,.2), limits =c(0,1)) +
-  scale_x_date(date_labels = "%b\n%Y",
-               breaks = function(x) seq.Date(from = min(x), to = max(x), by = "6 months"),
-               minor_breaks = function(x) seq.Date(from = min(x), to = max(x), by = "3 months"),
-               limits = function(x) c(min(x)- months(1), max(x) + months(1)),
-               expand = c(0.0, 0)) +
+ # scale_x_date(date_labels = "%b\n%Y",
+              # breaks = function(x) seq.Date(from = min(x), to = #max(x), by = "6 months"),
+              # minor_breaks = function(x) seq.Date(from = min(x), to = #max(x), by = "3 months"),
+            #  limits = function(x) c(min(x)- months(1), max(x) + months(1)),
+              # expand = c(0.0, 0)) +
   theme_minimal(base_family = "Corbel") +
-  labs(x= "Calendar Date", 
+  labs(x= "Time", 
        y= "Percentage Documentation", 
        title= "Presenting complaints and cardinal signs",
        caption = "Each unique colour-coded point represents an individual hospital") +
@@ -943,27 +943,27 @@ plot.presenting.complains %>% ggplot() +
 plot.other.signs <- Validate_Scores %>%
   dplyr::filter(!(Hospital %in% c("Bondo DH", "Karatina District Hospital"))) %>%
   dplyr::filter(!(Admission.DateTime < as.Date("2018-01-01", formart = "%Y-%m-%d"))) %>%
-  dplyr::mutate(
-    Month.Year = lubridate::as_date(zoo::as.yearqtr(Admission.DateTime))
-  ) %>%
-  dplyr::group_by(Hospital, Month.Year) %>%
+#  dplyr::mutate(
+  #  Month.Year = lubridate::as_date(zoo::as.yearqtr(Admission.DateTime)#)
+ # ) %>%
+  dplyr::group_by(Hospital, Time) %>%
   dplyr::summarise(
     `Score` = sum( `Other Signs`, na.rm = T),
     `Denominator` = sum(`Denom.Other Signs`, na.rm = T),
     `Rate` = round(Score/Denominator,4)) %>%
   dplyr::ungroup() 
 plot.other.signs %>% ggplot() +
-  geom_point(aes(x = Month.Year, y = Rate, group = Hospital, color = Hospital)) +
+  geom_point(aes(x = Time, y = Rate, group = Hospital, color = Hospital)) +
   ggsci::scale_color_d3(palette = "category20b") + 
-  geom_smooth(aes(x = Month.Year, y = Rate), data = plot.other.signs, method = "loess", formula = 'y ~ x') +
+  geom_smooth(aes(x = Time, y = Rate), data = plot.other.signs, method = "loess", formula = 'y ~ x') +
   scale_y_continuous(labels = scales::percent, breaks =seq(0,1,.2), limits =c(0.,1)) +
-  scale_x_date(date_labels = "%b\n%Y",
-               breaks = function(x) seq.Date(from = min(x), to = max(x), by = "6 months"),
-               minor_breaks = function(x) seq.Date(from = min(x), to = max(x), by = "3 months"),
-               limits = function(x) c(min(x)- months(1), max(x) + months(1)),
-               expand = c(0.0, 0)) +
+  #scale_x_date(date_labels = "%b\n%Y",
+             #  breaks = function(x) seq.Date(from = min(x), to = #max(x), by = "6 months"),
+               ##minor_breaks = function(x) seq.Date(from = min(x), to = #max(x), by = "3 months"),
+              # limits = function(x) c(min(x)- months(1), max(x) + #months(1)),
+            #   expand = c(0.0, 0)) +
   theme_minimal(base_family = "Corbel") +
-  labs(x= "Calendar Date", 
+  labs(x= "Time", 
        y= "Percentage Documentation", 
        title= "Other signs examination ",
        caption = "Each unique colour-coded point represents an individual hospital") +
@@ -992,27 +992,27 @@ other.signs.list<-c("Can Suck or Breastfeed",
 plot.treatment <- Validate_Scores %>%
   dplyr::filter(!(Hospital %in% c("Bondo DH", "Karatina District Hospital"))) %>%
   dplyr::filter(!(Admission.DateTime < as.Date("2018-01-01", formart = "%Y-%m-%d"))) %>%
-  dplyr::mutate(
-    Month.Year = lubridate::as_date(zoo::as.yearqtr(Admission.DateTime))
-  ) %>%
-  dplyr::group_by(Hospital, Month.Year) %>%
+ # dplyr::mutate(
+    #Month.Year = lubridate::as_date(zoo::as.yearqtr(Admission.DateTime)#)
+ # ) %>%
+  dplyr::group_by(Hospital, Time) %>%
   dplyr::summarise(
     `Score` = sum( `First Line Antibiotics`, na.rm = T),
     `Denominator` = sum(`Denom.First Line Antibiotics`, na.rm = T),
     `Rate` = round(Score/Denominator,4)) %>%
   dplyr::ungroup() 
 plot.treatment %>% ggplot() +
-  geom_point(aes(x = Month.Year, y = Rate, group = Hospital, color = Hospital)) +
+  geom_point(aes(x =Time, y = Rate, group = Hospital, color = Hospital)) +
   ggsci::scale_color_d3(palette = "category20b") + 
-  geom_smooth(aes(x = Month.Year, y = Rate), data = plot.treatment, method = "loess", formula = 'y ~ x') +
+  geom_smooth(aes(x = Time, y = Rate), data = plot.treatment, method = "loess", formula = 'y ~ x') +
   scale_y_continuous(labels = scales::percent, breaks =seq(0,1,.2), limits =c(0,1)) +
-  scale_x_date(date_labels = "%b\n%Y",
-               breaks = function(x) seq.Date(from = min(x), to = max(x), by = "6 months"),
-               minor_breaks = function(x) seq.Date(from = min(x), to = max(x), by = "3 months"),
-               limits = function(x) c(min(x)- months(1), max(x) + months(1)),
-               expand = c(0.0, 0)) +
+  #scale_x_date(date_labels = "%b\n%Y",
+             #  breaks = function(x) seq.Date(from = min(x), to = #max(x), by = "6 months"),
+               #minor_breaks = function(x) seq.Date(from = min(x), to = #max(x), by = "3 months"),
+             #  limits = function(x) c(min(x)- months(1), max(x) + #months(1)),
+              # expand = c(0.0, 0)) +
   theme_minimal(base_family = "Corbel") +
-  labs(x= "Calendar Date", 
+  labs(x= "Time", 
        y= "Percentage Documentation", 
        title= "Antibiotic prescriptions ",
        caption = "Each unique colour-coded point represents an individual hospital") +
@@ -1042,10 +1042,10 @@ treatment.list<-c( "Age",
 plot.fluids <- Validate_Scores %>%
   dplyr::filter(!(Hospital %in% c("Bondo DH", "Karatina District Hospital"))) %>%
   dplyr::filter(!(Admission.DateTime < as.Date("2018-01-01", formart = "%Y-%m-%d"))) %>%
-  dplyr::mutate(
-    Month.Year = lubridate::as_date(zoo::as.yearqtr(Admission.DateTime))
-  ) %>%
-  dplyr::group_by(Hospital, Month.Year) %>%
+  #dplyr::mutate(
+   # Month.Year = lubridate::as_date(zoo::as.yearqtr(Admission.DateTime)#)
+ # ) %>%
+  dplyr::group_by(Hospital, Time) %>%
   dplyr::summarise(
     `Score` = sum( `Fluids`, na.rm = T),
     `Denominator` = sum(`Denom.Fluids`, na.rm = T),
@@ -1053,17 +1053,17 @@ plot.fluids <- Validate_Scores %>%
   ) %>%
   dplyr::ungroup() 
 plot.fluids %>% ggplot() +
-  geom_point(aes(x = Month.Year, y = Rate, group = Hospital, color = Hospital)) +
+  geom_point(aes(x = Time, y = Rate, group = Hospital, color = Hospital)) +
   ggsci::scale_color_d3(palette = "category20b") + 
-  geom_smooth(aes(x = Month.Year, y = Rate), data =plot.fluids, method = "loess", formula = 'y ~ x') +
+  geom_smooth(aes(x = Time, y = Rate), data =plot.fluids, method = "loess", formula = 'y ~ x') +
   scale_y_continuous(labels = scales::percent, breaks =seq(0,1,.2), limits =c(0,1)) +
-  scale_x_date(date_labels = "%b\n%Y",
-               breaks = function(x) seq.Date(from = min(x), to = max(x), by = "6 months"),
-               minor_breaks = function(x) seq.Date(from = min(x), to = max(x), by = "3 months"),
-               limits = function(x) c(min(x)- months(1), max(x) + months(1)),
-               expand = c(0.0, 0)) +
+  #scale_x_date(date_labels = "%b\n%Y",
+              # breaks = function(x) seq.Date(from = min(x), to = #max(x), by = "6 months"),
+              # minor_breaks = function(x) seq.Date(from = min(x), to = #max(x), by = "3 months"),
+               #limits = function(x) c(min(x)- months(1), max(x) + #months(1)),
+              # expand = c(0.0, 0)) +
   theme_minimal(base_family = "Corbel") +
-  labs(x= "Calendar Date", 
+  labs(x= "Time", 
        y= "Percentage Documentation", 
        title= "Fluids prescription ",
        caption = "Each unique colour-coded point represents an individual hospital") +
@@ -1084,10 +1084,10 @@ plot.fluids %>% ggplot() +
 plot.feeds <- Validate_Scores %>%
   dplyr::filter(!(Hospital %in% c("Bondo DH", "Karatina District Hospital"))) %>%
   dplyr::filter(!(Admission.DateTime < as.Date("2018-01-01", formart = "%Y-%m-%d"))) %>%
-  dplyr::mutate(
-    Month.Year = lubridate::as_date(zoo::as.yearqtr(Admission.DateTime))
-  ) %>%
-  dplyr::group_by(Hospital, Month.Year) %>%
+  #dplyr::mutate(
+   # Month.Year = lubridate::as_date(zoo::as.yearqtr(Admission.DateTime)#)
+ # ) %>%
+  dplyr::group_by(Hospital, Time) %>%
   dplyr::summarise(
     `Score` = sum( `Feeds`, na.rm = T),
     `Denominator` = sum(`Denom.Feeds`, na.rm = T),
@@ -1095,17 +1095,17 @@ plot.feeds <- Validate_Scores %>%
   ) %>%
   dplyr::ungroup() 
 plot.feeds %>% ggplot() +
-  geom_point(aes(x = Month.Year, y = Rate, group = Hospital, color = Hospital)) +
+  geom_point(aes(x = Time, y = Rate, group = Hospital, color = Hospital)) +
   ggsci::scale_color_d3(palette = "category20b") + 
-  geom_smooth(aes(x = Month.Year, y = Rate), data =plot.feeds, method = "loess", formula = 'y ~ x') +
+  geom_smooth(aes(x = Time, y = Rate), data =plot.feeds, method = "loess", formula = 'y ~ x') +
   scale_y_continuous(labels = scales::percent, breaks =seq(0,1,.2), limits =c(0,1)) +
-  scale_x_date(date_labels = "%b\n%Y",
-               breaks = function(x) seq.Date(from = min(x), to = max(x), by = "6 months"),
-               minor_breaks = function(x) seq.Date(from = min(x), to = max(x), by = "3 months"),
-               limits = function(x) c(min(x)- months(1), max(x) + months(1)),
-               expand = c(0.0, 0)) +
+  #scale_x_date(date_labels = "%b\n%Y",
+               #breaks = function(x) seq.Date(from = min(x), to = #max(x), by = "6 months"),
+               #minor_breaks = function(x) seq.Date(from = min(x), to = #max(x), by = "3 months"),
+               #limits = function(x) c(min(x)- months(1), max(x) + #months(1)),
+               #expand = c(0.0, 0)) +
   theme_minimal(base_family = "Corbel") +
-  labs(x= "Calendar Date", 
+  labs(x= "Time", 
        y= "Percentage Documentation", 
        title= "Feeds prescription ",
        caption = "Each unique colour-coded point represents an individual hospital") +
@@ -1126,10 +1126,10 @@ plot.feeds %>% ggplot() +
 plot.monitoring <- Validate_Scores %>%
   dplyr::filter(!(Hospital %in% c("Bondo DH", "Karatina District Hospital"))) %>%
   dplyr::filter(!(Admission.DateTime < as.Date("2018-01-01", formart = "%Y-%m-%d"))) %>%
-  dplyr::mutate(
-    Month.Year = lubridate::as_date(zoo::as.yearqtr(Admission.DateTime))
-  ) %>%
-  dplyr::group_by(Hospital, Month.Year) %>%
+  #dplyr::mutate(
+   # Month.Year = lubridate::as_date(zoo::as.yearqtr(Admission.DateTime)#)
+ # ) %>%
+  dplyr::group_by(Hospital, Time) %>%
   dplyr::summarise(
     `Score` = sum( `Monitoring`, na.rm = T),
     `Denominator` = sum(`Denom.Monitoring`, na.rm = T),
@@ -1137,17 +1137,17 @@ plot.monitoring <- Validate_Scores %>%
   ) %>%
   dplyr::ungroup() 
 plot.monitoring %>% ggplot() +
-  geom_point(aes(x = Month.Year, y = Rate, group = Hospital, color = Hospital)) +
+  geom_point(aes(x = Time, y = Rate, group = Hospital, color = Hospital)) +
   ggsci::scale_color_d3(palette = "category20b") + 
-  geom_smooth(aes(x = Month.Year, y = Rate), data =plot.monitoring, method = "loess", formula = 'y ~ x') +
+  geom_smooth(aes(x = Time, y = Rate), data =plot.monitoring, method = "loess", formula = 'y ~ x') +
   scale_y_continuous(labels = scales::percent, breaks =seq(0,1,.2), limits =c(0,1)) +
-  scale_x_date(date_labels = "%b\n%Y",
-               breaks = function(x) seq.Date(from = min(x), to = max(x), by = "6 months"),
-               minor_breaks = function(x) seq.Date(from = min(x), to = max(x), by = "3 months"),
-               limits = function(x) c(min(x)- months(1), max(x) + months(1)),
-               expand = c(0.0, 0)) +
+  #scale_x_date(date_labels = "%b\n%Y",
+              # breaks = function(x) seq.Date(from = min(x), to = #max(x), by = "6 months"),
+              # minor_breaks = function(x) seq.Date(from = min(x), to = #max(x), by = "3 months"),
+               #limits = function(x) c(min(x)- months(1), max(x) + #months(1)),
+             #  expand = c(0.0, 0)) +
   theme_minimal(base_family = "Corbel") +
-  labs(x= "Calendar Date", 
+  labs(x= "Time", 
        y= "Percentage Documentation", 
        title= "Monitoring ",
        caption = "Each unique colour-coded point represents an individual hospital") +
@@ -1168,10 +1168,10 @@ Vitals.list<-c("Weight monitoring recorded",
 plot.supportive.care <- Validate_Scores %>%
   dplyr::filter(!(Hospital %in% c("Bondo DH", "Karatina District Hospital"))) %>%
   dplyr::filter(!(Admission.DateTime < as.Date("2018-01-01", formart = "%Y-%m-%d"))) %>%
-  dplyr::mutate(
-    Month.Year = lubridate::as_date(zoo::as.yearqtr(Admission.DateTime))
-  ) %>%
-  dplyr::group_by(Hospital, Month.Year) %>%
+ # dplyr::mutate(
+ #   Month.Year = lubridate::as_date(zoo::as.yearqtr(Admission.DateTime)#)
+ # ) %>%
+  dplyr::group_by(Hospital, Time) %>%
   dplyr::summarise(
     `Score` = sum( `Supportive Care`, na.rm = T),
     `Denominator` = sum(`Denom.Supportive Care`, na.rm = T),
@@ -1179,17 +1179,17 @@ plot.supportive.care <- Validate_Scores %>%
   ) %>%
   dplyr::ungroup() 
 plot.supportive.care %>% ggplot() +
-  geom_point(aes(x = Month.Year, y = Rate, group = Hospital, color = Hospital)) +
+  geom_point(aes(x = Time, y = Rate, group = Hospital, color = Hospital)) +
   ggsci::scale_color_d3(palette = "category20b") + 
-  geom_smooth(aes(x = Month.Year, y = Rate), data =plot.supportive.care, method = "loess", formula = 'y ~ x') +
+  geom_smooth(aes(x = Time, y = Rate), data =plot.supportive.care, method = "loess", formula = 'y ~ x') +
   scale_y_continuous(labels = scales::percent, breaks =seq(0,1,.2), limits =c(0,1)) +
-  scale_x_date(date_labels = "%b\n%Y",
-               breaks = function(x) seq.Date(from = min(x), to = max(x), by = "6 months"),
-               minor_breaks = function(x) seq.Date(from = min(x), to = max(x), by = "3 months"),
-               limits = function(x) c(min(x)- months(1), max(x) + months(1)),
-               expand = c(0.0, 0)) +
+  #scale_x_date(date_labels = "%b\n%Y",
+   #            breaks = function(x) seq.Date(from = min(x), to = #max(x), by = "6 months"),
+             #  minor_breaks = function(x) seq.Date(from = min(x), to = #max(x), by = "3 months"),
+              # limits = function(x) c(min(x)- months(1), max(x) + #months(1)),
+               #expand = c(0.0, 0)) +
   theme_minimal(base_family = "Corbel") +
-  labs(x= "Calendar Date", 
+  labs(x= "Time", 
        y= "Percentage Documentation", 
        title= "Supportive Care",
        caption = "Each unique colour-coded point represents an individual hospital") +

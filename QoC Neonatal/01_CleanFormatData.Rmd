@@ -21,7 +21,7 @@ spacing: double
 # CIN-N Analysis Dataset Preparation
 ## Tag minimum dataset
 ```{r warning=F, message=F}
-
+setwd("C:/Users/dchelangat/Downloads/qqq/Statistical-Programming-Projects/QoC Neonatal")
 Dataset <- data.table(read_csv("CIN_N_Dataset.csv",guess_max = 80000))
 Dataset[ , key := .I]
 setkey(Dataset,key)
@@ -1701,7 +1701,8 @@ Analysis.Dataset <- Dataset %>%
     Oxygen.Sat.Group,
     LOS,
     LOS.Group,
-    Date.Valid
+    Date.Valid,
+    After_SENSS_NETS_Drop  
   )
 setnames(Analysis.Dataset, c("date_adm","date_discharge"),c("Admission_Date", 
                                                             "Discharge_Date"))
@@ -1718,6 +1719,7 @@ replace.empty.with.na <- function(column){
   }
 }
 Analysis.Dataset <- Analysis.Dataset[,lapply(.SD, replace.empty.with.na)]
+Analysis.Dataset<-Analysis.Dataset%>%dplyr::filter(!is.na(After_SENSS_NETS_Drop) & After_SENSS_NETS_Drop == F)
 
 write.csv(Analysis.Dataset, "analysis.csv",row.names = F)
 
