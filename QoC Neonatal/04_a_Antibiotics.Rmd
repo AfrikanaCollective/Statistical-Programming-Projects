@@ -3,7 +3,7 @@
 
 ### Flow-chart data
 ```{r echo=FALSE, message=FALSE, warning=FALSE, comment = NA}
-
+setwd("C:/Users/dchelangat/Downloads")
 Dataset <- data.table(read_csv("analysis.csv",guess_max = 80000, 
                                col_types = cols()))
 Dataset[ , key := .I]
